@@ -1,0 +1,39 @@
+[project]
+name = "resume-app"
+version = "0.1.0"
+description = "AI resume builder: guided editor, ATS-friendly templates, AI bullet rewriting and job tailoring."
+requires-python = ">=3.12"
+dependencies = [
+  # Web app
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "jinja2>=3.1.6",
+  "python-multipart>=0.0.9",
+  "itsdangerous>=2.2",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.2",
+  # Payments + AI
+  "stripe>=10.0",
+  "anthropic>=0.70",
+  # Resume engine (vendored in cvengine/)
+  "markdown>=3.10.2",
+  "phonenumbers>=9.0.24",
+  "pydantic-extra-types>=2.11.0",
+  "pydantic[email]>=2.12.5",
+  "ruamel.yaml>=0.19.1",
+  "typst>=0.14.8",
+  "rendercv-fonts>=0.5.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["cvengine"]

@@ -1,0 +1,8 @@
+[package]
+name = "cvengine"
+version = "0.3.0"
+entrypoint = "lib.typ"
+authors = ["Upstream authors (see LICENSE.upstream)"]
+license = "MIT"
+description = "Resume layout engine"
+compiler = "0.14.0"
