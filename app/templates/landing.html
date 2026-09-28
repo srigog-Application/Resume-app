@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <div class="eyebrow"><span class="dot"></span> AI resume builder · ATS-optimized</div>
+      <h1>Land more interviews with a resume that <span class="gradient-text">gets past the bots</span>.</h1>
+      <p class="lede">Fill in a guided form, let AI sharpen every bullet, and tailor your resume to each job in one click. Then export a clean PDF that applicant tracking systems read perfectly.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="{{ '/app' if user else '/signup' }}">Build my resume, free</a>
+        <a class="btn btn-secondary btn-lg" href="#templates">See templates</a>
+      </div>
+      <div class="hero-proof"><span>No credit card</span><span>PDF export included</span><span>Ready in 10 minutes</span></div>
+    </div>
+    <div class="hero-visual">
+      <div class="paper"><img src="/static/img/templates/classic.png" alt="Example resume built with {{ settings.app_name }}" width="612" height="792"></div>
+      <div class="float-card fc-1">
+        <div class="fc-title">✨ AI bullet rewrite</div>
+        <div class="strike small">Responsible for the checkout page</div>
+        <div class="small"><b>Led checkout redesign, lifting conversion 14% and adding $3.2M ARR</b></div>
+      </div>
+      <div class="float-card fc-2 row" style="flex-wrap:nowrap">
+        <div class="score-ring" style="--p:86"><b>86</b></div>
+        <div class="small"><b>Job match score</b><br><span class="muted">12 of 14 keywords matched</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Features</div>
+      <h2>Everything you need to write a resume recruiters actually read</h2>
+      <p>We handle the formatting and the wording, so you can focus on your experience.</p>
+    </div>
+    <div class="features">
+      <div class="card feature"><div class="ico">🧭</div><h3>Guided builder</h3><p>Step-by-step sections with examples and tips. No blank-page panic, no fighting with Word margins.</p></div>
+      <div class="card feature"><div class="ico">✨</div><h3>AI bullet rewriter</h3><p>Turn “responsible for…” into crisp, quantified achievements. The AI never invents numbers. It leaves [placeholders] for you to fill in.</p></div>
+      <div class="card feature"><div class="ico">🎯</div><h3>One-click job tailoring</h3><p>Paste a job description to get a match score, missing keywords, and a rewritten summary and bullets aimed at that role.</p></div>
+      <div class="card feature"><div class="ico">🤖</div><h3>ATS-friendly by design</h3><p>Single-column layouts, real text (never images), standard headings and fonts that every applicant tracking system can parse.</p></div>
+      <div class="card feature"><div class="ico">🗂️</div><h3>Versions for every application</h3><p>Snapshot your resume before tailoring, keep a copy per job, and restore any version in a click.</p></div>
+      <div class="card feature"><div class="ico">📄</div><h3>Pixel-perfect PDF</h3><p>Professional typesetting with proper kerning and page breaks. It looks as good printed as on screen.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background:var(--surface);border-block:1px solid var(--border)">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">How it works</div>
+      <h2>From blank page to tailored resume in three steps</h2>
+    </div>
+    <div class="steps">
+      <div class="card step"><h3>Fill in the guided form</h3><p class="muted">Add your experience, education and skills. Watch the live preview update as you type.</p></div>
+      <div class="card step"><h3>Polish with AI</h3><p class="muted">Rewrite weak bullets, generate a summary, and pick a template and accent color.</p></div>
+      <div class="card step"><h3>Tailor and export</h3><p class="muted">Paste a job post, apply the suggestions you like, save a version, and download your PDF.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="templates">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Templates</div>
+      <h2>Professional templates, all ATS-tested</h2>
+      <p>Switch templates anytime. Your content re-flows instantly.</p>
+    </div>
+    <div class="tpl-grid">
+      {% for key, t in TEMPLATES.items() %}
+      <div class="card tpl-card">
+        <img src="/static/img/templates/{{ key }}.png" alt="{{ t.name }} resume template" loading="lazy" width="612" height="792">
+        <div class="meta">
+          <b>{{ t.name }} {% if t.free %}<span class="badge badge-free">Free</span>{% else %}<span class="badge badge-pro">Pro</span>{% endif %}</b>
+          <div class="small muted">{{ t.blurb }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Why it works</div>
+      <h2>Recruiters skim. Bots filter. We optimize for both.</h2>
+    </div>
+    <div class="compare">
+      <div class="card"><h3>❌ The usual resume</h3><ul class="muted">
+        <li>Lists duties instead of results</li>
+        <li>Two-column layouts that ATS parsers scramble</li>
+        <li>Same generic resume sent to every job</li>
+        <li>Missing the keywords from the job post</li>
+      </ul></div>
+      <div class="card" style="border-color:var(--brand-100)"><h3>✅ With {{ settings.app_name }}</h3><ul>
+        <li>Impact-first bullets with metrics</li>
+        <li>Clean single-column, machine-readable PDFs</li>
+        <li>A tailored version for every application</li>
+        <li>Instant keyword match score before you apply</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="pricing" style="background:var(--surface);border-block:1px solid var(--border)">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Pricing</div>
+      <h2>Simple pricing. Start free.</h2>
+      <p>Upgrade when you're actively applying. Cancel anytime.</p>
+    </div>
+    <div class="pricing">
+      <div class="card price-card">
+        <h3>Free</h3>
+        <div class="price">$0 <small>forever</small></div>
+        <ul class="checklist">
+          <li>{{ free.max_resumes }} resumes</li>
+          <li>3 ATS-friendly templates</li>
+          <li>Unlimited PDF downloads</li>
+          <li>{{ free.ai_credits_per_month }} AI rewrites per month</li>
+          <li>Keyword match score</li>
+          <li>{{ free.max_versions_per_resume }} saved versions per resume</li>
+        </ul>
+        <a class="btn btn-secondary btn-block" href="{{ '/app' if user else '/signup' }}">Start for free</a>
+      </div>
+      <div class="card price-card featured">
+        <h3>Pro</h3>
+        <div class="price">{{ settings.pro_price_label }} <small>/ month</small></div>
+        <ul class="checklist">
+          <li>Unlimited resumes and tailored copies</li>
+          <li>All {{ TEMPLATES|length }} premium templates</li>
+          <li>{{ pro.ai_credits_per_month }} AI actions per month</li>
+          <li>One-click job tailoring</li>
+          <li>Unlimited version history</li>
+                  </ul>
+        {% if user %}
+          <a class="btn btn-primary btn-block" href="/app/account">{{ 'Manage plan' if user.is_pro else 'Upgrade to Pro' }}</a>
+        {% else %}
+          <a class="btn btn-primary btn-block" href="/signup?next=/app/account">Get Pro</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="container">
+    <div class="section-head"><div class="kicker">FAQ</div><h2>Questions, answered</h2></div>
+    <div class="faq">
+      <details><summary>What does “ATS-friendly” mean?</summary><p>Most companies run resumes through an applicant tracking system before a human sees them. Our templates use a single reading order, real selectable text, standard section names and common fonts, so parsers extract your details correctly.</p></details>
+      <details><summary>Will the AI make things up?</summary><p>No. The AI is instructed never to invent employers, tools or numbers. When a metric would help, it inserts a highlighted placeholder like [X%] for you to fill in with the real figure.</p></details>
+      <details><summary>How does job tailoring work?</summary><p>Paste a job description. You'll instantly see which keywords you match and which are missing. Then AI suggests a targeted summary and reordered, reworded bullets. You choose what to apply, and can save the result as a new version or a separate copy.</p></details>
+      <details><summary>Can I keep different versions for different jobs?</summary><p>Yes. Save named snapshots of any resume, restore them anytime, or duplicate a resume into a tailored copy for a specific application.</p></details>
+      <details><summary>Can I cancel anytime?</summary><p>Yes. Manage or cancel your subscription from your account page. You keep Pro until the end of the billing period, and your resumes are always yours.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="container" style="margin-bottom:20px">
+  <div class="cta-band">
+    <h2>Your next job starts with a better resume.</h2>
+    <p>Join job seekers who build, tailor and send stronger applications in minutes.</p>
+    <a class="btn btn-primary btn-lg" href="{{ '/app' if user else '/signup' }}">Create my resume</a>
+  </div>
+</section>
+{% endblock %}

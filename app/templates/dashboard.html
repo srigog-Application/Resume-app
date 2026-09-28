@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}My resumes · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-head">
+    <div>
+      <h1>My resumes</h1>
+      <div class="muted small">{{ user.email }} · <span class="badge {{ 'badge-pro' if user.is_pro else 'badge-free' }}">{{ plan.name }}</span></div>
+    </div>
+    <div class="card card-pad" style="min-width:260px;padding:14px 16px">
+      <div class="row small" style="justify-content:space-between;margin-bottom:6px">
+        <b>AI credits</b><span class="muted">{{ credits_left }} / {{ plan.ai_credits_per_month }} left</span>
+      </div>
+      <div class="usage-bar"><span style="width:{{ (100 * credits_left / plan.ai_credits_per_month)|round|int }}%"></span></div>
+      {% if not user.is_pro %}<div class="tiny" style="margin-top:8px"><a href="/app/account">Upgrade for more →</a></div>{% endif %}
+    </div>
+  </div>
+
+  <div class="resume-grid">
+    {% for r in user.resumes %}
+      {% set tpl = r.data.get('design', {}).get('template', 'classic') %}
+      <div class="card resume-card">
+        <a class="thumb" href="/app/resumes/{{ r.id }}"><img src="/static/img/templates/{{ tpl if tpl in TEMPLATES else 'classic' }}.png" alt="" loading="lazy"></a>
+        <div class="body">
+          <a href="/app/resumes/{{ r.id }}" style="color:inherit"><b>{{ r.title }}</b></a>
+          <div class="tiny muted">{{ TEMPLATES.get(tpl, TEMPLATES['classic']).name }} · Edited <time data-ts="{{ r.updated_at.isoformat() }}Z">{{ r.updated_at.strftime('%b %d, %Y') }}</time> · {{ r.versions|length }} version{{ '' if r.versions|length == 1 else 's' }}</div>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary btn-sm" href="/app/resumes/{{ r.id }}">Edit</a>
+          <a class="btn btn-secondary btn-sm" href="/app/resumes/{{ r.id }}/pdf">PDF</a>
+          <div class="spacer"></div>
+          <form method="post" action="/app/resumes/{{ r.id }}/delete" onsubmit="return confirm('Delete this resume and all its versions? This cannot be undone.')">
+            <button class="icon-btn" title="Delete resume" aria-label="Delete resume">🗑</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+    <form method="post" action="/app/resumes">
+      <button class="new-card" type="submit"><span><span class="plus">＋</span>New resume</span></button>
+    </form>
+  </div>
+  {% if plan.max_resumes %}<p class="small muted" style="margin-top:14px">Free plan: {{ user.resumes|length }} of {{ plan.max_resumes }} resumes used.</p>{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // Show "Edited" times in the viewer's timezone.
+  document.querySelectorAll('time[data-ts]').forEach(t => {
+    const d = new Date(t.dataset.ts);
+    if (!isNaN(d)) t.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  });
+</script>
+{% endblock %}

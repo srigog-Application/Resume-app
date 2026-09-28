@@ -37,3 +37,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 extend-exclude = ["cvengine"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008", "SIM905"]  # FastAPI's Depends()/Form() in defaults is idiomatic.

@@ -1,0 +1,34 @@
+# Render Blueprint: one web service + one Postgres database.
+# Deploy: Render Dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: resume-app
+    runtime: docker
+    plan: starter            # "free" works for demos but sleeps when idle
+    healthCheckPath: /healthz
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: resume-db
+          property: connectionString
+      - key: APP_NAME
+        value: Resumora
+      - key: ANTHROPIC_API_KEY
+        sync: false          # set in the dashboard
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PRO_PRICE_LABEL
+        value: "$12"
+
+databases:
+  - name: resume-db
+    plan: basic-256mb        # "free" expires after 30 days
+    databaseName: resume

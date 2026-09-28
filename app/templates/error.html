@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ status }} · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="center">
+    <div class="kicker">Error {{ status }}</div>
+    <h1>{{ 'Page not found' if status == 404 else 'Something went wrong' }}</h1>
+    <p class="muted">{{ detail if detail and detail != 'Not Found' else "We couldn't find what you were looking for." }}</p>
+    <a class="btn btn-primary" href="/">Go home</a>
+  </div>
+</div>
+{% endblock %}
