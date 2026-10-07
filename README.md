@@ -1,19 +1,23 @@
-# Resumora: AI resume builder
+# Resumora: AI resume builder and job-search workspace
 
-A lean, production-ready AI resume builder you can run locally and charge for.
+A lean, production-ready AI job-search app you can run locally and charge for. It covers the same feature set as tools like JobSuit AI: build, analyze and tailor resumes, write cover letters, and track applications.
 
-- **Guided builder**: step-by-step form (contact → experience → education → skills → projects → certifications → summary) with a **live preview** that updates as you type.
-- **ATS-friendly templates**: 9 single-column, real-text templates. 3 are free, 6 are Pro. Output is typeset with [Typst](https://typst.app), so PDFs are crisp and parse cleanly.
-- **AI writing (Claude)**:
-  - rewrite one bullet or all bullets of a role for impact
-  - write a professional summary
-  - **tailor to a pasted job description**: rewritten summary and bullets, skills to add, missing keywords, tips
-  - the AI never invents numbers. It inserts highlighted `[X%]` placeholders for you to fill in.
-- **Free job-match score**: an instant, offline keyword comparison between the resume and the job post (no AI credits used).
-- **Versions**: named snapshots per resume (restore or download any of them), plus "save as tailored copy".
-- **PDF export**, with a sensible filename (`Jane_Doe_Resume.pdf`).
-- **Accounts and billing**: email/password auth, and a Free/Pro plan through Stripe Checkout, the Customer Portal and webhooks.
-- A responsive landing page (features, templates, pricing, FAQ) and a mobile-friendly editor.
+- **Upload and import**: drop in a PDF, DOCX or TXT resume. AI converts it into editable sections, then opens the analysis.
+- **Guided builder**: step-by-step form with a **live preview**. 9 ATS-friendly, single-column templates (3 free, 6 paid), typeset with [Typst](https://typst.app).
+- **Resume analysis**:
+  - instant, free ATS checks (contact info, dates, metrics, weak verbs, pronouns, length…) with a readiness score
+  - an AI recruiter review: overall score, verdict, top fixes, section-by-section scores, missing keywords
+- **Tailor to a job**:
+  - pick a tracked job or paste a description
+  - free keyword match score
+  - AI suggestions for the summary, each role's bullets and skills, which you **accept or reject one by one**
+  - or save everything as a tailored copy
+- **AI resume coach**: per-resume chat that asks clarifying questions before rewriting. It proposes concrete edits you accept or reject.
+- **Cover letters**: generated from your resume and a job, with a choice of tone. Edit with autosave and export a matching PDF.
+- **Job tracker**: a drag-and-drop board (Saved → Applied → Interviewing → Offer / Rejected), with stats and links to the resume and cover letter used.
+- **Versions**: named snapshots per resume (restore or download any of them), plus tailored copies.
+- **Plans**: Free / Pro / Elite with per-feature monthly quotas, billed through Stripe Checkout, the Customer Portal and webhooks.
+- **No invented facts**: the AI never invents numbers. It inserts highlighted `[X%]` placeholders for you to fill in.
 
 The app name is a placeholder. Set `APP_NAME` to rebrand.
 
@@ -25,13 +29,18 @@ The app name is a placeholder. Set `APP_NAME` to rebrand.
 app/                      FastAPI web app
   main.py                 app factory, middleware (sessions, CSRF origin check, security headers)
   config.py               settings from environment / .env
-  models.py, db.py        SQLAlchemy models: User, Resume, ResumeVersion, ProcessedStripeEvent
+  models.py, db.py        SQLAlchemy models: User, Resume, ResumeVersion, Usage, Job, CoverLetter,
+                          ChatMessage, ProcessedStripeEvent
   resume_data.py          the editor's JSON schema, template list, mapping to the engine
-  renderer.py             ResumeData → Typst → PDF / PNG preview (sandboxed temp dir per render)
-  ai.py                   Claude calls with structured outputs; demo-mode fallback without a key
-  keywords.py             offline ATS keyword matching / match score
-  plans.py                Free vs Pro limits and AI-credit metering
-  routes/                 pages.py (HTML), auth.py, api.py (JSON for the editor), billing.py (Stripe)
+  renderer.py             ResumeData → Typst → PDF / PNG preview; cover-letter PDFs
+  ai.py                   Claude client + bullet rewrite, summary, tailoring (structured outputs)
+  ai_features.py          resume import, AI analysis, coach chat (+ edit proposals), cover letters
+  ats.py                  offline ATS checks / readiness score
+  keywords.py             offline job-keyword matching / match score
+  extract.py              text extraction from uploaded PDF / DOCX / TXT
+  plans.py                Free / Pro / Elite quotas and per-feature usage metering
+  routes/                 pages.py, auth.py, api.py (editor JSON), workspace.py (jobs + letters),
+                          billing.py (Stripe)
   templates/, static/     Jinja pages, CSS, vanilla-JS editor
 cvengine/                 resume layout engine, a vendored fork of rendercv (see below)
 tests/                    pytest suite (auth, resumes, versions, limits, AI, billing, engine security)
@@ -71,11 +80,14 @@ Without any keys:
 - **Billing is disabled**. The Upgrade button explains what to configure.
 - **SQLite** is used at `./data/app.db`.
 
-To give yourself Pro locally without Stripe:
+To give yourself a paid plan locally without Stripe:
 
 ```bash
-sqlite3 data/app.db "update users set plan='pro' where email='you@example.com'"
+sqlite3 data/app.db "update users set plan='elite' where email='you@example.com'"   # or 'pro'
 ```
+
+> Upgrading from an earlier checkout of this branch? The schema changed. Delete
+> `data/app.db` so it is recreated.
 
 Run the tests and the linter:
 
@@ -98,21 +110,34 @@ uv run ruff check .
 | `ANTHROPIC_API_KEY` | for AI | From [console.anthropic.com](https://console.anthropic.com/settings/keys). Without it, AI runs in demo mode. |
 | `ANTHROPIC_MODEL` | no | Default `claude-opus-5`. |
 | `STRIPE_SECRET_KEY` | for billing | `sk_test_…` in test mode. |
-| `STRIPE_PRICE_ID` | for billing | The recurring Price for Pro (`price_…`). |
+| `STRIPE_PRICE_PRO` | for billing | Recurring Price for Pro (`price_…`). `STRIPE_PRICE_ID` also works, as an alias. |
+| `STRIPE_PRICE_ELITE` | for Elite | Recurring Price for Elite. If unset, only Pro is offered at checkout. |
 | `STRIPE_WEBHOOK_SECRET` | for billing | `whsec_…` from the webhook endpoint or the `stripe listen` output. |
-| `PRO_PRICE_LABEL` | no | Price shown on the pricing page (default `$12`). Keep it in sync with your Stripe price. |
 | `WEB_CONCURRENCY` | no | Uvicorn workers in Docker (default 2). |
 
-Plan limits (resumes, versions, AI credits, which templates are free) live in `app/plans.py` and `app/resume_data.py`.
+### Plans and limits
+
+All limits live in `app/plans.py` (prices shown on the site, quotas, resume and version limits). Which templates are free is set in `app/resume_data.py`. Usage resets every 30 days from signup.
+
+| | Free | Pro ($11.99/mo) | Elite ($23.99/mo) |
+|---|---|---|---|
+| Resume analyses (AI) | 3 | 100 | Unlimited |
+| Job tailorings (AI) | 3 | 100 | Unlimited |
+| Cover letters (AI) | 3 | 100 | 100 |
+| AI coach & rewrite credits | 20 | 500 | 500 |
+| Resumes / uploads | 3 | Unlimited | Unlimited |
+| Templates | 3 | All 9 | All 9 |
+| Versions per resume | 3 | Unlimited | Unlimited |
+| ATS checks, keyword match, job tracker, PDF export | ✓ | ✓ | ✓ |
 
 ---
 
 ## Stripe setup (test mode)
 
 1. In the Stripe Dashboard, switch to **Test mode**.
-2. **Product catalog → Add product**: "Pro", recurring, for example $12/month. Copy the **Price ID** (`price_…`) into `STRIPE_PRICE_ID`.
+2. **Product catalog → Add product**: "Pro", recurring at $11.99/month, and "Elite", recurring at $23.99/month. Copy each **Price ID** (`price_…`) into `STRIPE_PRICE_PRO` and `STRIPE_PRICE_ELITE`. If you change the prices, also update `price_label` in `app/plans.py`.
 3. **Developers → API keys**: copy the secret key (`sk_test_…`) into `STRIPE_SECRET_KEY`.
-4. **Settings → Billing → Customer portal**: activate it (needed for "Manage subscription").
+4. **Settings → Billing → Customer portal**: activate it, and under *Subscriptions* allow customers to switch between the Pro and Elite prices. Existing subscribers change plans there, and the webhook updates their plan.
 5. Webhooks:
    - **Locally**, with the [Stripe CLI](https://stripe.com/docs/stripe-cli):
      ```bash
@@ -136,7 +161,7 @@ When you go live, repeat these steps in live mode and swap in the live keys.
 
 1. Push this repo to GitHub.
 2. In Render: **New → Blueprint**, then pick the repo. Render creates `resume-app` and `resume-db`, generates `SECRET_KEY`, and wires `DATABASE_URL`.
-3. When prompted, fill in `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` and `STRIPE_WEBHOOK_SECRET`. You can add the webhook secret after step 4.
+3. When prompted, fill in `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ELITE` and `STRIPE_WEBHOOK_SECRET`. You can add the webhook secret after step 4.
 4. Once it's live, add the Stripe webhook endpoint `https://<your-service>.onrender.com/billing/webhook` (see above) and set its secret.
 5. Optional: add a custom domain under Settings → Custom Domains. If you do, set `BASE_URL` to it.
 
@@ -148,7 +173,8 @@ The blueprint uses the `starter` web plan and the `basic-256mb` Postgres plan. `
 docker build -t resume-app .
 docker run -p 8000:8000 \
   -e SECRET_KEY=... -e DATABASE_URL=postgres://... -e BASE_URL=https://your.domain \
-  -e ANTHROPIC_API_KEY=... -e STRIPE_SECRET_KEY=... -e STRIPE_PRICE_ID=... -e STRIPE_WEBHOOK_SECRET=... \
+  -e ANTHROPIC_API_KEY=... -e STRIPE_SECRET_KEY=... -e STRIPE_PRICE_PRO=... \
+  -e STRIPE_PRICE_ELITE=... -e STRIPE_WEBHOOK_SECRET=... \
   resume-app
 ```
 
@@ -163,9 +189,10 @@ Before scaling, consider these. None of them are needed to start charging.
 - **No password reset or email verification** yet. Add a transactional email provider (Postmark, Resend, SES).
 - **No login rate limiting**. Add one at the proxy or with a small middleware, or put Cloudflare in front.
 - **Schema changes**: tables are created with `create_all`. Introduce Alembic before your first schema change in production.
-- **AI costs**: each AI action is one Claude call. Tune `ai_credits_per_month` in `app/plans.py`, or set `ANTHROPIC_MODEL` to a cheaper model.
+- **AI costs**: each AI action is one Claude call. Tune the quotas in `app/plans.py`, or set `ANTHROPIC_MODEL` to a cheaper model.
+- **Scanned (image-only) PDFs** can't be imported: there is no OCR. Users get a clear message asking for a text-based PDF or DOCX.
 - Phone numbers without a `+country` prefix are assumed to be US numbers.
-- Import from an existing PDF or LinkedIn, and cover letters, are natural next features.
+- Natural next features: LinkedIn profile import, interview-prep questions per tracked job, and a browser extension that saves job posts to the tracker.
 
 ## License
 

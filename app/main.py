@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import BASE_DIR, settings
 from .db import init_db
-from .routes import api, auth, billing, pages
+from .routes import api, auth, billing, pages, workspace
 from .security import LoginRequired, OriginCheckMiddleware
 from .web import render
 
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(api.router)
     app.include_router(billing.router)
+    app.include_router(workspace.router)
 
     @app.exception_handler(LoginRequired)
     async def _login_required(request: Request, exc: LoginRequired):

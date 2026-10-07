@@ -1,15 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Account · {{ settings.app_name }}{% endblock %}
 {% block content %}
-<div class="container" style="max-width:860px">
+<div class="container" style="max-width:980px">
   <div class="page-head"><h1>Account &amp; billing</h1></div>
 
   <div class="card card-pad" style="margin-bottom:18px">
     <div class="row">
-      <div>
-        <div class="muted small">Signed in as</div>
-        <b>{{ user.email }}</b>
-      </div>
+      <div><div class="muted small">Signed in as</div><b>{{ user.email }}</b></div>
       <div class="spacer"></div>
       <form method="post" action="/logout"><button class="btn btn-secondary">Log out</button></form>
     </div>
@@ -19,42 +16,27 @@
     <div class="row" style="align-items:flex-start">
       <div>
         <div class="muted small">Current plan</div>
-        <h2 style="margin:4px 0">{{ plan.name }} <span class="badge {{ 'badge-pro' if user.is_pro else 'badge-free' }}">{{ plan.name }}</span></h2>
+        <h2 style="margin:4px 0">{{ plan.name }}</h2>
         {% if user.subscription_status and user.subscription_status not in ('active', 'trialing') %}
-          <div class="alert alert-warning small">Subscription status: {{ user.subscription_status }}. Update your payment method to keep Pro.</div>
+          <div class="alert alert-warning small">Subscription status: {{ user.subscription_status }}. Update your payment method to keep your plan.</div>
         {% endif %}
-        <div class="muted small">AI credits: {{ credits_left }} of {{ plan.ai_credits_per_month }} left this month</div>
       </div>
       <div class="spacer"></div>
-      {% if user.is_pro or user.stripe_customer_id %}
-        {% if settings.billing_enabled %}
+      {% if user.stripe_customer_id and settings.billing_enabled %}
         <form method="post" action="/billing/portal"><button class="btn btn-secondary">Manage subscription</button></form>
-        {% endif %}
       {% endif %}
     </div>
+    <div class="meters" style="margin-top:14px">
+      {% for u in usage %}
+      <div class="card meter">
+        <div class="row small"><b>{{ u.label }}</b><span class="muted">{% if u.limit is none %}Unlimited{% else %}{{ u.used }} / {{ u.limit }}{% endif %}</span></div>
+        <div class="usage-bar"><span style="width:{{ 0 if u.limit is none else ((100 * u.used / u.limit)|round|int) }}%"></span></div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="tiny muted" style="margin:10px 0 0">Usage resets every 30 days.</p>
   </div>
 
-  {% if not user.is_pro %}
-  <div class="card price-card featured" style="margin-top:28px">
-    <div class="row" style="align-items:flex-start">
-      <div>
-        <h3>Upgrade to Pro</h3>
-        <div class="price">{{ settings.pro_price_label }} <small>/ month</small></div>
-      </div>
-    </div>
-    <ul class="checklist">
-      <li>Unlimited resumes and tailored copies (Free: {{ free.max_resumes }})</li>
-      <li>All {{ TEMPLATES|length }} templates (Free: 3)</li>
-      <li>{{ pro.ai_credits_per_month }} AI actions per month (Free: {{ free.ai_credits_per_month }})</li>
-      <li>Unlimited version history (Free: {{ free.max_versions_per_resume }} per resume)</li>
-    </ul>
-    {% if settings.billing_enabled %}
-      <form method="post" action="/billing/checkout"><button class="btn btn-primary btn-lg btn-block">Upgrade with Stripe</button></form>
-      <p class="tiny muted center" style="margin:10px 0 0">Secure checkout by Stripe. Cancel anytime.</p>
-    {% else %}
-      <div class="alert alert-info small">Billing isn't configured on this server yet. Set <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_PRICE_ID</code> (see README).</div>
-    {% endif %}
-  </div>
-  {% endif %}
+  {% include "_pricing.html" %}
 </div>
 {% endblock %}

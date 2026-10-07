@@ -14,16 +14,25 @@
 <header class="nav">
   <div class="container nav-inner">
     <a class="logo" href="/"><span class="logo-mark">{{ settings.app_name[:1] }}</span>{{ settings.app_name }}</a>
+    {% if user %}
+    {% set path = request.url.path %}
+    <nav class="nav-links app-links">
+      <a href="/app" class="{{ 'active' if path == '/app' or path.startswith('/app/resumes') }}">Resumes</a>
+      <a href="/app/jobs" class="{{ 'active' if path.startswith('/app/jobs') }}">Job tracker</a>
+      <a href="/app/letters" class="{{ 'active' if path.startswith('/app/letters') }}">Cover letters</a>
+    </nav>
+    {% else %}
     <nav class="nav-links">
       <a href="/#features">Features</a>
       <a href="/#templates">Templates</a>
       <a href="/#pricing">Pricing</a>
       <a href="/#faq">FAQ</a>
     </nav>
+    {% endif %}
     <div class="spacer"></div>
     {% if user %}
-      <a class="btn btn-ghost hide-mobile" href="/app/account">Account</a>
-      <a class="btn btn-primary" href="/app">My resumes</a>
+      {% if not user.is_pro %}<a class="btn btn-secondary btn-sm hide-mobile" href="/app/account">⚡ Upgrade</a>{% endif %}
+      <a class="btn btn-ghost" href="/app/account" title="Account">Account</a>
     {% else %}
       <a class="btn btn-ghost" href="/login">Log in</a>
       <a class="btn btn-primary" href="/signup">Get started <span class="hide-mobile">free</span></a>
@@ -42,6 +51,15 @@
 {% endif %}
 
 {% block content %}{% endblock %}
+
+{% if user %}
+<nav class="mobile-tabs" aria-label="App">
+  <a href="/app">📄<span>Resumes</span></a>
+  <a href="/app/jobs">🗂<span>Jobs</span></a>
+  <a href="/app/letters">✉️<span>Letters</span></a>
+  <a href="/app/account">👤<span>Account</span></a>
+</nav>
+{% endif %}
 
 {% block footer %}
 <footer class="footer">

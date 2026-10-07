@@ -3,12 +3,12 @@
 <section class="hero">
   <div class="container hero-grid">
     <div>
-      <div class="eyebrow"><span class="dot"></span> AI resume builder · ATS-optimized</div>
+      <div class="eyebrow"><span class="dot"></span> AI resume builder · cover letters · job tracker</div>
       <h1>Land more interviews with a resume that <span class="gradient-text">gets past the bots</span>.</h1>
-      <p class="lede">Fill in a guided form, let AI sharpen every bullet, and tailor your resume to each job in one click. Then export a clean PDF that applicant tracking systems read perfectly.</p>
+      <p class="lede">Upload your resume and get an instant ATS analysis. Tailor it to every job with suggestions you approve, write the cover letter, and track the application, all in one place.</p>
       <div class="hero-cta">
         <a class="btn btn-primary btn-lg" href="{{ '/app' if user else '/signup' }}">Build my resume, free</a>
-        <a class="btn btn-secondary btn-lg" href="#templates">See templates</a>
+        <a class="btn btn-secondary btn-lg" href="{{ '/app' if user else '/signup' }}">Upload my resume</a>
       </div>
       <div class="hero-proof"><span>No credit card</span><span>PDF export included</span><span>Ready in 10 minutes</span></div>
     </div>
@@ -31,16 +31,19 @@
   <div class="container">
     <div class="section-head">
       <div class="kicker">Features</div>
-      <h2>Everything you need to write a resume recruiters actually read</h2>
-      <p>We handle the formatting and the wording, so you can focus on your experience.</p>
+      <h2>Your whole job search, in one AI workspace</h2>
+      <p>Build, analyze, tailor, write cover letters and track every application without juggling five tools.</p>
     </div>
     <div class="features">
-      <div class="card feature"><div class="ico">🧭</div><h3>Guided builder</h3><p>Step-by-step sections with examples and tips. No blank-page panic, no fighting with Word margins.</p></div>
-      <div class="card feature"><div class="ico">✨</div><h3>AI bullet rewriter</h3><p>Turn “responsible for…” into crisp, quantified achievements. The AI never invents numbers. It leaves [placeholders] for you to fill in.</p></div>
-      <div class="card feature"><div class="ico">🎯</div><h3>One-click job tailoring</h3><p>Paste a job description to get a match score, missing keywords, and a rewritten summary and bullets aimed at that role.</p></div>
-      <div class="card feature"><div class="ico">🤖</div><h3>ATS-friendly by design</h3><p>Single-column layouts, real text (never images), standard headings and fonts that every applicant tracking system can parse.</p></div>
-      <div class="card feature"><div class="ico">🗂️</div><h3>Versions for every application</h3><p>Snapshot your resume before tailoring, keep a copy per job, and restore any version in a click.</p></div>
-      <div class="card feature"><div class="ico">📄</div><h3>Pixel-perfect PDF</h3><p>Professional typesetting with proper kerning and page breaks. It looks as good printed as on screen.</p></div>
+      <div class="card feature"><div class="ico">⬆️</div><h3>Upload &amp; import</h3><p>Drop in your existing PDF or Word resume. AI turns it into editable sections in seconds, with no retyping.</p></div>
+      <div class="card feature"><div class="ico">🔍</div><h3>Instant resume analysis</h3><p>An ATS score, a section-by-section review and a ranked list of fixes, like a recruiter's second opinion.</p></div>
+      <div class="card feature"><div class="ico">🎯</div><h3>Tailor to any job</h3><p>Paste a posting to see your keyword match and get targeted rewrites. Accept or reject each suggestion, so you stay in control.</p></div>
+      <div class="card feature"><div class="ico">💬</div><h3>AI resume coach</h3><p>Chat about your resume. The coach asks about your real results before rewriting, so nothing is made up.</p></div>
+      <div class="card feature"><div class="ico">✉️</div><h3>Cover letters in one click</h3><p>Role-specific letters built from your resume and the job post. Edit, then export a matching PDF.</p></div>
+      <div class="card feature"><div class="ico">🗂️</div><h3>Job application tracker</h3><p>A drag-and-drop board from Saved to Offer. Each job keeps its description, resume and cover letter together.</p></div>
+      <div class="card feature"><div class="ico">🤖</div><h3>ATS-friendly templates</h3><p>Single-column layouts with real text and standard headings that every applicant tracking system can parse.</p></div>
+      <div class="card feature"><div class="ico">🕘</div><h3>Versions &amp; tailored copies</h3><p>Snapshot before you tailor, keep a copy per application, and restore any version in a click.</p></div>
+      <div class="card feature"><div class="ico">📄</div><h3>Pixel-perfect PDF</h3><p>Professional typesetting with proper page breaks. It looks as good printed as on screen.</p></div>
     </div>
   </div>
 </section>
@@ -107,40 +110,10 @@
   <div class="container">
     <div class="section-head">
       <div class="kicker">Pricing</div>
-      <h2>Simple pricing. Start free.</h2>
+      <h2>Start free. Upgrade when you're applying.</h2>
       <p>Upgrade when you're actively applying. Cancel anytime.</p>
     </div>
-    <div class="pricing">
-      <div class="card price-card">
-        <h3>Free</h3>
-        <div class="price">$0 <small>forever</small></div>
-        <ul class="checklist">
-          <li>{{ free.max_resumes }} resumes</li>
-          <li>3 ATS-friendly templates</li>
-          <li>Unlimited PDF downloads</li>
-          <li>{{ free.ai_credits_per_month }} AI rewrites per month</li>
-          <li>Keyword match score</li>
-          <li>{{ free.max_versions_per_resume }} saved versions per resume</li>
-        </ul>
-        <a class="btn btn-secondary btn-block" href="{{ '/app' if user else '/signup' }}">Start for free</a>
-      </div>
-      <div class="card price-card featured">
-        <h3>Pro</h3>
-        <div class="price">{{ settings.pro_price_label }} <small>/ month</small></div>
-        <ul class="checklist">
-          <li>Unlimited resumes and tailored copies</li>
-          <li>All {{ TEMPLATES|length }} premium templates</li>
-          <li>{{ pro.ai_credits_per_month }} AI actions per month</li>
-          <li>One-click job tailoring</li>
-          <li>Unlimited version history</li>
-                  </ul>
-        {% if user %}
-          <a class="btn btn-primary btn-block" href="/app/account">{{ 'Manage plan' if user.is_pro else 'Upgrade to Pro' }}</a>
-        {% else %}
-          <a class="btn btn-primary btn-block" href="/signup?next=/app/account">Get Pro</a>
-        {% endif %}
-      </div>
-    </div>
+    {% include "_pricing.html" %}
   </div>
 </section>
 
@@ -152,6 +125,8 @@
       <details><summary>Will the AI make things up?</summary><p>No. The AI is instructed never to invent employers, tools or numbers. When a metric would help, it inserts a highlighted placeholder like [X%] for you to fill in with the real figure.</p></details>
       <details><summary>How does job tailoring work?</summary><p>Paste a job description. You'll instantly see which keywords you match and which are missing. Then AI suggests a targeted summary and reordered, reworded bullets. You choose what to apply, and can save the result as a new version or a separate copy.</p></details>
       <details><summary>Can I keep different versions for different jobs?</summary><p>Yes. Save named snapshots of any resume, restore them anytime, or duplicate a resume into a tailored copy for a specific application.</p></details>
+      <details><summary>What's the difference between Pro and Elite?</summary><p>Both unlock every template, unlimited resumes and version history. Pro covers an active search with 100 analyses and 100 tailorings a month. Elite makes analyses and tailorings unlimited for heavy appliers and career coaches.</p></details>
+      <details><summary>Can I import my existing resume?</summary><p>Yes. Upload a PDF, DOCX or TXT file and we'll turn it into editable sections, then run an analysis so you know what to fix first.</p></details>
       <details><summary>Can I cancel anytime?</summary><p>Yes. Manage or cancel your subscription from your account page. You keep Pro until the end of the billing period, and your resumes are always yours.</p></details>
     </div>
   </div>

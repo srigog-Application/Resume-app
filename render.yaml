@@ -21,12 +21,12 @@ services:
         sync: false          # set in the dashboard
       - key: STRIPE_SECRET_KEY
         sync: false
-      - key: STRIPE_PRICE_ID
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_ELITE
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: PRO_PRICE_LABEL
-        value: "$12"
 
 databases:
   - name: resume-db

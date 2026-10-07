@@ -10,7 +10,8 @@
   <input class="input title-input" id="title" value="{{ resume.title }}" maxlength="200" aria-label="Resume title">
   <span class="save-state" id="save-state">Saved</span>
   <div class="spacer"></div>
-  <span class="small muted hide-sm" id="credits" title="AI credits left this month">✨ {{ credits_left }} credits</span>
+  <span class="small muted hide-sm" id="credits" title="AI coach & rewrite credits left this month"></span>
+  <button class="btn btn-ai btn-sm" id="btn-coach">💬 <span class="hide-sm">AI coach</span></button>
   <button class="btn btn-secondary btn-sm" id="btn-versions">🕘 <span class="hide-sm">Versions</span></button>
   <a class="btn btn-primary btn-sm" id="btn-download" href="/app/resumes/{{ resume.id }}/pdf">⬇ <span class="hide-sm">Download PDF</span></a>
 </header>
@@ -39,7 +40,8 @@
   "data": resume_json,
   "isPro": user.is_pro,
   "aiEnabled": settings.ai_enabled,
-  "creditsLeft": credits_left,
+  "left": left,
+  "jobs": jobs,
   "templates": TEMPLATES,
 } | tojson }}</script>
 <script src="/static/js/editor.js" defer></script>

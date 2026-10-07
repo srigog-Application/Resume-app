@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Job tracker · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1400px">
+  <div class="page-head">
+    <div>
+      <h1>Job tracker</h1>
+      <div class="muted small">Drag cards between columns as your applications progress.</div>
+    </div>
+    <button class="btn btn-primary" id="add-job">＋ Add job</button>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="board" id="board"></div>
+</div>
+<script type="application/json" id="boot">{{ boot | tojson }}</script>
+<script src="/static/js/common.js"></script>
+<script src="/static/js/jobs.js" defer></script>
+{% endblock %}
+{% block footer %}{% endblock %}

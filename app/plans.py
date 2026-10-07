@@ -1,52 +1,117 @@
-"""Free vs. Pro limits in one place, so pricing copy and enforcement agree."""
+"""Free / Pro / Elite limits in one place, so pricing copy and enforcement agree.
+
+AI usage is metered per feature per 30-day period (see `Usage`). `None`
+means unlimited.
+"""
 
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from .models import User, utcnow
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from .models import Usage, User, utcnow
+
+FEATURES = {
+    "analysis": "Resume analyses",
+    "tailor": "Job tailorings",
+    "cover_letter": "Cover letters",
+    "chat": "AI chat & rewrite credits",
+}
 
 
 @dataclass(frozen=True)
 class Plan:
     key: str
     name: str
-    max_resumes: int | None  # None = unlimited
+    price_label: str
+    max_resumes: int | None
     max_versions_per_resume: int | None
-    ai_credits_per_month: int
     templates: str  # "free" or "all"
+    quotas: dict[str, int | None] = field(default_factory=dict)
 
 
-FREE = Plan("free", "Free", max_resumes=2, max_versions_per_resume=3, ai_credits_per_month=10,
-            templates="free")
-PRO = Plan("pro", "Pro", max_resumes=None, max_versions_per_resume=None,
-           ai_credits_per_month=500, templates="all")
+FREE = Plan("free", "Free", "$0", max_resumes=3, max_versions_per_resume=3, templates="free",
+            quotas={"analysis": 3, "tailor": 3, "cover_letter": 3, "chat": 20})
+PRO = Plan("pro", "Pro", "$11.99", max_resumes=None, max_versions_per_resume=None,
+           templates="all",
+           quotas={"analysis": 100, "tailor": 100, "cover_letter": 100, "chat": 500})
+ELITE = Plan("elite", "Elite", "$23.99", max_resumes=None, max_versions_per_resume=None,
+             templates="all",
+             quotas={"analysis": None, "tailor": None, "cover_letter": 100, "chat": 500})
+PLANS = {p.key: p for p in (FREE, PRO, ELITE)}
+PAID_PLANS = (PRO, ELITE)
+
+PERIOD = dt.timedelta(days=30)
 
 
 def plan_for(user: User) -> Plan:
-    return PRO if user.is_pro else FREE
+    return PLANS.get(user.plan, FREE)
 
 
-AI_PERIOD = dt.timedelta(days=30)
+def _period_start(user: User) -> dt.datetime:
+    """Usage resets every 30 days from signup."""
+    start = user.created_at
+    periods = (utcnow() - start) // PERIOD
+    return start + periods * PERIOD
 
 
-def _roll_period(user: User) -> None:
-    if utcnow() - user.ai_period_start >= AI_PERIOD:
-        user.ai_period_start = utcnow()
-        user.ai_credits_used = 0
+def _usage_row(db: Session, user: User, feature: str) -> Usage:
+    start = _period_start(user)
+    row = db.scalar(select(Usage).where(
+        Usage.user_id == user.id, Usage.feature == feature, Usage.period_start == start))
+    if row is None:
+        row = Usage(user_id=user.id, feature=feature, period_start=start, count=0)
+        try:
+            with db.begin_nested():  # Two concurrent first-uses may race to insert.
+                db.add(row)
+        except IntegrityError:
+            row = db.scalar(select(Usage).where(
+                Usage.user_id == user.id, Usage.feature == feature,
+                Usage.period_start == start))
+    return row
 
 
-def ai_credits_left(user: User) -> int:
-    _roll_period(user)
-    return max(0, plan_for(user).ai_credits_per_month - user.ai_credits_used)
+def remaining(db: Session, user: User, feature: str) -> int | None:
+    limit = plan_for(user).quotas[feature]
+    if limit is None:
+        return None
+    return max(0, limit - _usage_row(db, user, feature).count)
 
 
-def consume_ai_credit(user: User) -> bool:
-    """Reserve one AI credit. Returns False when the monthly quota is exhausted."""
-    if ai_credits_left(user) <= 0:
+def usage_summary(db: Session, user: User) -> list[dict]:
+    plan = plan_for(user)
+    out = []
+    for key, label in FEATURES.items():
+        used = _usage_row(db, user, key).count
+        limit = plan.quotas[key]
+        out.append({"key": key, "label": label, "used": used, "limit": limit,
+                    "left": None if limit is None else max(0, limit - used)})
+    return out
+
+
+def consume(db: Session, user: User, feature: str) -> bool:
+    """Reserve one use of `feature`. Returns False when the quota is exhausted."""
+    row = _usage_row(db, user, feature)
+    limit = plan_for(user).quotas[feature]
+    if limit is not None and row.count >= limit:
         return False
-    user.ai_credits_used += 1
+    row.count += 1
     return True
 
 
-def refund_ai_credit(user: User) -> None:
-    user.ai_credits_used = max(0, user.ai_credits_used - 1)
+def refund(db: Session, user: User, feature: str) -> None:
+    row = _usage_row(db, user, feature)
+    row.count = max(0, row.count - 1)
+
+
+def upgrade_hint(user: User, feature: str) -> str:
+    label = FEATURES[feature].lower()
+    plan = plan_for(user)
+    if plan.key == "free":
+        return f"You've used all your free {label} this month. Upgrade to Pro for " \
+               f"{PRO.quotas[feature]} per month."
+    if plan.key == "pro" and ELITE.quotas[feature] is None:
+        return f"You've used all {label} on Pro this month. Elite makes them unlimited."
+    return f"You've used all {label} this month. Your quota resets in under 30 days."

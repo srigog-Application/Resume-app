@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -34,27 +34,42 @@ def _stripe() -> Any:
     return stripe
 
 
+def _subscription_plan(subscription: dict[str, Any]) -> str:
+    """Which paid plan a subscription is for: by price ID, then by our metadata."""
+    items = (subscription.get("items") or {}).get("data") or []
+    for item in items:
+        if plan := settings.plan_for_price((item.get("price") or {}).get("id")):
+            return plan
+    meta_plan = (subscription.get("metadata") or {}).get("plan")
+    return meta_plan if meta_plan in ("pro", "elite") else "pro"
+
+
 def apply_subscription(user: User, subscription: dict[str, Any]) -> None:
     status = subscription.get("status")
     user.stripe_subscription_id = subscription.get("id")
     user.subscription_status = status
-    user.plan = "pro" if status in ACTIVE_STATUSES else "free"
+    user.plan = _subscription_plan(subscription) if status in ACTIVE_STATUSES else "free"
     if customer := subscription.get("customer"):
         user.stripe_customer_id = customer if isinstance(customer, str) else customer.get("id")
 
 
 @router.post("/checkout")
-def checkout(request: Request, user: User = Depends(require_user_page),
-             db: Session = Depends(get_db)):
+def checkout(request: Request, plan: str = Form("pro"),
+             user: User = Depends(require_user_page)):
     if user.is_pro:
+        # Plan changes for existing subscribers happen in the Stripe Customer Portal.
+        flash(request, "Use “Manage subscription” to switch between Pro and Elite.", "info")
         return RedirectResponse("/app/account", status_code=303)
     s = _stripe()
+    price = settings.price_for(plan)
+    if not price:
+        raise HTTPException(status_code=400, detail="That plan isn't available.")
     params: dict[str, Any] = {
         "mode": "subscription",
-        "line_items": [{"price": settings.stripe_price_id, "quantity": 1}],
+        "line_items": [{"price": price, "quantity": 1}],
         "client_reference_id": str(user.id),
-        "metadata": {"user_id": str(user.id)},
-        "subscription_data": {"metadata": {"user_id": str(user.id)}},
+        "metadata": {"user_id": str(user.id), "plan": plan},
+        "subscription_data": {"metadata": {"user_id": str(user.id), "plan": plan}},
         "allow_promotion_codes": True,
         "success_url": f"{settings.base_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{settings.base_url}/app/account",
@@ -80,7 +95,7 @@ def success(request: Request, session_id: str = "", user: User = Depends(require
         user.stripe_customer_id = session.get("customer")
         apply_subscription(user, session["subscription"])
         db.commit()
-        flash(request, "You're on Pro. Thanks for upgrading!", "success")
+        flash(request, f"You're on {user.plan.title()}. Thanks for upgrading!", "success")
     return RedirectResponse("/app/account", status_code=303)
 
 

@@ -90,7 +90,11 @@ def _supports_fallbacks(model: str) -> bool:
     return model.startswith(("claude-opus-5", "claude-fable-5"))
 
 
-def _call[T: BaseModel](prompt: str, schema: type[T]) -> T:
+def _call[T: BaseModel](
+    prompt: str | list[dict], schema: type[T], system: str = SYSTEM
+) -> T:
+    """One structured-output request. `prompt` is a user message or a full history."""
+    messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
     model = settings.anthropic_model
     extra = {}
     if _supports_fallbacks(model):
@@ -100,8 +104,8 @@ def _call[T: BaseModel](prompt: str, schema: type[T]) -> T:
         response = _client().beta.messages.parse(
             model=model,
             max_tokens=16000,
-            system=SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
+            system=system,
+            messages=messages,
             output_format=schema,
             output_config={"effort": "medium"},  # Interactive UI: favour latency.
             **extra,
@@ -198,7 +202,7 @@ def _demo_bullet(bullet: str) -> str:
             text = re.sub(pattern, repl, text, count=1, flags=re.I)
             break
     text = text[:1].upper() + text[1:]
-    if not re.search(r"\d", text):
+    if not re.search(r"\d|\[[^\]]+\]", text):
         text += ", improving [key metric] by [X%]"
     return text
 

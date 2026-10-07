@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Resume, ResumeVersion, User
-from ..plans import FREE, PRO, ai_credits_left, plan_for
+from ..plans import ELITE, FREE, PRO, plan_for, remaining, usage_summary
 from ..renderer import RenderError, pdf_filename, render_pdf
 from ..resume_data import TEMPLATES, ResumeData, blank_resume
 from ..security import get_optional_user, require_user_page
@@ -27,14 +27,19 @@ def can_use_template(user: User, template_key: str) -> bool:
 
 @router.get("/")
 def landing(request: Request, user: User | None = Depends(get_optional_user)):
-    return render(request, "landing.html", user=user, free=FREE, pro=PRO)
+    return render(request, "landing.html", user=user, free=FREE, pro=PRO, elite=ELITE)
 
 
 @router.get("/app")
-def dashboard(request: Request, user: User = Depends(require_user_page)):
-    plan = plan_for(user)
-    return render(request, "dashboard.html", user=user, plan=plan,
-                  credits_left=ai_credits_left(user))
+def dashboard(request: Request, user: User = Depends(require_user_page),
+              db: Session = Depends(get_db)):
+    from .workspace import user_jobs, user_letters
+
+    jobs = user_jobs(db, user)
+    usage = usage_summary(db, user)
+    db.commit()
+    return render(request, "dashboard.html", user=user, plan=plan_for(user), usage=usage,
+                  jobs=jobs, letters=user_letters(db, user))
 
 
 @router.post("/app/resumes")
@@ -60,11 +65,15 @@ def editor(
     user: User = Depends(require_user_page),
     db: Session = Depends(get_db),
 ):
+    from .workspace import job_out, user_jobs
+
     resume = owned_resume(db, user, resume_id)
     data = ResumeData.model_validate(resume.data)
+    left = {f: remaining(db, user, f) for f in ("chat", "tailor", "analysis")}
+    db.commit()
     return render(request, "editor.html", user=user, resume=resume,
-                  resume_json=data.model_dump(), plan=plan_for(user),
-                  credits_left=ai_credits_left(user))
+                  resume_json=data.model_dump(), plan=plan_for(user), left=left,
+                  jobs=[job_out(j) for j in user_jobs(db, user)])
 
 
 def _pdf_response(request: Request, user: User, data: ResumeData, suffix: str = ""):
@@ -124,6 +133,9 @@ def delete_resume(
 
 
 @router.get("/app/account")
-def account(request: Request, user: User = Depends(require_user_page)):
+def account(request: Request, user: User = Depends(require_user_page),
+            db: Session = Depends(get_db)):
+    usage = usage_summary(db, user)
+    db.commit()
     return render(request, "account.html", user=user, plan=plan_for(user), free=FREE, pro=PRO,
-                  credits_left=ai_credits_left(user))
+                  elite=ELITE, usage=usage)

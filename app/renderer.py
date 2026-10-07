@@ -86,3 +86,50 @@ def pdf_filename(data: ResumeData, suffix: str = "") -> str:
     base = re.sub(r"[^A-Za-z0-9]+", "_", data.basics.name or "Resume").strip("_") or "Resume"
     suffix = re.sub(r"[^A-Za-z0-9]+", "_", suffix).strip("_")
     return f"{base}_Resume{'_' + suffix if suffix else ''}.pdf"
+
+
+# ---------------------------------------------------------------- cover letters
+
+LETTER_TEMPLATE = """\
+#let d = json("letter.json")
+#set document(title: d.title)
+#set page(paper: d.paper, margin: (x: 1in, y: 0.9in))
+#set text(font: "Source Sans 3", size: 11pt, fill: rgb("#1f2328"))
+#set par(justify: false, leading: 0.7em, spacing: 1.1em)
+#text(size: 20pt, weight: "bold", fill: rgb(d.accent))[#d.name]
+#if d.contact != "" [ #v(-0.5em) #text(size: 9.5pt, fill: rgb("#57606a"))[#d.contact] ]
+#line(length: 100%, stroke: 0.6pt + rgb(d.accent))
+#v(0.6em)
+#text(size: 10pt, fill: rgb("#57606a"))[#d.date]
+#v(0.4em)
+#for p in d.paragraphs [ #par[#p] ]
+"""
+
+
+def render_letter_pdf(body: str, data: ResumeData, title: str, date: str) -> bytes:
+    """Typeset a cover letter. Text is passed as JSON data, never as Typst markup."""
+    import json
+
+    b = data.basics
+    contact = " · ".join(x for x in (b.email, b.phone, b.location) if x)
+    paragraphs = [p.strip() for p in body.replace("\r", "").split("\n\n") if p.strip()]
+    payload = {
+        "title": title[:200] or "Cover letter",
+        "name": b.name or "",
+        "contact": contact,
+        "date": date,
+        "paragraphs": paragraphs or [""],
+        "accent": data.design.accent_color or "#004f90",
+        "paper": data.design.page_size,
+    }
+    with tempfile.TemporaryDirectory(prefix="letter-") as tmp:
+        root = pathlib.Path(tmp)
+        (root / "letter.typ").write_text(LETTER_TEMPLATE, encoding="utf-8")
+        (root / "letter.json").write_text(json.dumps(payload), encoding="utf-8")
+        compiler = typst.Compiler(root=root, font_paths=rendercv_fonts.paths_to_font_folders)
+        try:
+            pdf = compiler.compile(input=root / "letter.typ", format="pdf")
+        except Exception as e:
+            raise RenderError("The cover letter could not be typeset.") from e
+    assert isinstance(pdf, bytes)
+    return pdf

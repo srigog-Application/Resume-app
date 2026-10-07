@@ -1,21 +1,42 @@
 {% extends "base.html" %}
-{% block title %}My resumes · {{ settings.app_name }}{% endblock %}
+{% block title %}Dashboard · {{ settings.app_name }}{% endblock %}
 {% block content %}
 <div class="container">
   <div class="page-head">
     <div>
-      <h1>My resumes</h1>
+      <h1>Welcome back</h1>
       <div class="muted small">{{ user.email }} · <span class="badge {{ 'badge-pro' if user.is_pro else 'badge-free' }}">{{ plan.name }}</span></div>
-    </div>
-    <div class="card card-pad" style="min-width:260px;padding:14px 16px">
-      <div class="row small" style="justify-content:space-between;margin-bottom:6px">
-        <b>AI credits</b><span class="muted">{{ credits_left }} / {{ plan.ai_credits_per_month }} left</span>
-      </div>
-      <div class="usage-bar"><span style="width:{{ (100 * credits_left / plan.ai_credits_per_month)|round|int }}%"></span></div>
-      {% if not user.is_pro %}<div class="tiny" style="margin-top:8px"><a href="/app/account">Upgrade for more →</a></div>{% endif %}
     </div>
   </div>
 
+  <div class="quick-actions">
+    <label class="card qa dropzone" id="dropzone" for="upload">
+      <span class="ico">⬆️</span>
+      <span><b>Upload your resume</b><span class="small muted">PDF, DOCX or TXT. We'll import it, then analyze it for ATS fit.</span>
+        <span class="small" id="upload-status" aria-live="polite"></span></span>
+      <input type="file" id="upload" accept=".pdf,.docx,.txt" hidden>
+    </label>
+    <form method="post" action="/app/resumes" style="display:contents">
+      <button class="card qa" type="submit"><span class="ico">✍️</span>
+        <span><b>Start from scratch</b><span class="small muted">Use the guided builder with live preview.</span></span></button>
+    </form>
+    <a class="card qa" href="/app/jobs?new=1"><span class="ico">🎯</span>
+      <span><b>Track a job</b><span class="small muted">Save a posting, then tailor your resume and write a cover letter for it.</span></span></a>
+  </div>
+
+  <div class="meters">
+    {% for u in usage %}
+    <div class="card meter">
+      <div class="row small"><b>{{ u.label }}</b>
+        <span class="muted">{% if u.limit is none %}Unlimited{% else %}{{ u.left }} / {{ u.limit }} left{% endif %}</span></div>
+      <div class="usage-bar"><span style="width:{{ 100 if u.limit is none else ((100 * u.left / u.limit)|round|int) }}%"></span></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if not user.is_pro %}<p class="small" style="margin-top:8px"><a href="/app/account">Need more? See Pro and Elite →</a></p>{% endif %}
+
+  <div class="section-title"><h2>My resumes</h2>
+    {% if plan.max_resumes %}<span class="small muted">{{ user.resumes|length }} of {{ plan.max_resumes }} on Free</span>{% endif %}</div>
   <div class="resume-grid">
     {% for r in user.resumes %}
       {% set tpl = r.data.get('design', {}).get('template', 'classic') %}
@@ -27,7 +48,8 @@
         </div>
         <div class="actions">
           <a class="btn btn-primary btn-sm" href="/app/resumes/{{ r.id }}">Edit</a>
-          <a class="btn btn-secondary btn-sm" href="/app/resumes/{{ r.id }}/pdf">PDF</a>
+          <a class="btn btn-secondary btn-sm" href="/app/resumes/{{ r.id }}#analysis">Analyze</a>
+          <a class="btn btn-ghost btn-sm" href="/app/resumes/{{ r.id }}/pdf">PDF</a>
           <div class="spacer"></div>
           <form method="post" action="/app/resumes/{{ r.id }}/delete" onsubmit="return confirm('Delete this resume and all its versions? This cannot be undone.')">
             <button class="icon-btn" title="Delete resume" aria-label="Delete resume">🗑</button>
@@ -35,19 +57,48 @@
         </div>
       </div>
     {% endfor %}
-    <form method="post" action="/app/resumes">
-      <button class="new-card" type="submit"><span><span class="plus">＋</span>New resume</span></button>
-    </form>
   </div>
-  {% if plan.max_resumes %}<p class="small muted" style="margin-top:14px">Free plan: {{ user.resumes|length }} of {{ plan.max_resumes }} resumes used.</p>{% endif %}
+
+  <div class="section-title"><h2>Recent applications</h2><a class="small" href="/app/jobs">Open tracker →</a></div>
+  {% if jobs %}
+  <div class="letter-list">
+    {% for j in jobs[:5] %}
+    <a class="card letter-row" href="/app/jobs?open={{ j.id }}" style="color:inherit;text-decoration:none">
+      <span class="status-dot dot-{{ j.status }}"></span>
+      <div class="info"><b>{{ j.title or 'Untitled role' }}</b> <span class="muted small">· {{ j.company }}</span></div>
+      <span class="badge">{{ j.status }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted small">No jobs tracked yet. <a href="/app/jobs?new=1">Add your first one</a> to tailor your resume against it.</p>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
-  // Show "Edited" times in the viewer's timezone.
   document.querySelectorAll('time[data-ts]').forEach(t => {
     const d = new Date(t.dataset.ts);
     if (!isNaN(d)) t.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   });
+
+  // Resume upload: click or drag & drop.
+  const zone = document.getElementById('dropzone'), input = document.getElementById('upload'),
+        status = document.getElementById('upload-status');
+  async function upload(file) {
+    if (!file) return;
+    status.textContent = ' Importing “' + file.name + '”… this can take ~20 seconds.';
+    const fd = new FormData(); fd.append('file', file);
+    try {
+      const res = await fetch('/api/resumes/import', { method: 'POST', body: fd, credentials: 'same-origin' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || 'Upload failed.');
+      window.location = body.url;
+    } catch (e) { status.textContent = ' ' + e.message; status.style.color = 'var(--danger)'; }
+  }
+  input.addEventListener('change', () => upload(input.files[0]));
+  ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('drag'); }));
+  zone.addEventListener('drop', e => upload(e.dataTransfer.files[0]));
 </script>
 {% endblock %}

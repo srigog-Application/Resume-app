@@ -80,16 +80,17 @@ def test_free_plan_limits(user_client):
     r = user_client.post(f"/api/resumes/{rid}/versions", json={"label": "v4"})
     assert r.status_code == 402
 
-    # Free plan: 2 resumes total (starter + one copy).
+    # Free plan: 3 resumes total (starter + two copies).
+    for title in ("Copy", "Copy 2"):
+        assert user_client.post(f"/api/resumes/{rid}/duplicate",
+                                json={"title": title}).status_code == 200
     assert user_client.post(f"/api/resumes/{rid}/duplicate",
-                            json={"title": "Copy"}).status_code == 200
-    assert user_client.post(f"/api/resumes/{rid}/duplicate",
-                            json={"title": "Copy 2"}).status_code == 402
+                            json={"title": "Copy 3"}).status_code == 402
 
     set_user(user_client.email, plan="pro")
     assert user_client.post(f"/api/resumes/{rid}/versions", json={"label": "v5"}).status_code == 200
     assert user_client.post(f"/api/resumes/{rid}/duplicate",
-                            json={"title": "Copy 3"}).status_code == 200
+                            json={"title": "Copy 4"}).status_code == 200
 
 
 def test_pro_template_locked_for_free_users(user_client):

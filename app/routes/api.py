@@ -3,17 +3,21 @@
 import base64
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .. import ai
+from .. import ai, ai_features, plans
+from ..ai import AIError
+from ..ats import run_checks
 from ..db import get_db
+from ..extract import MAX_BYTES as MAX_UPLOAD
+from ..extract import ExtractError, extract_text
 from ..keywords import keyword_report
-from ..models import Resume, ResumeVersion, User
-from ..plans import PRO, ai_credits_left, consume_ai_credit, plan_for, refund_ai_credit
+from ..models import ChatMessage, Resume, ResumeVersion, User
+from ..plans import plan_for
 from ..renderer import RenderError, render_png_pages
 from ..resume_data import TEMPLATES, ResumeData, resume_plain_text
 from ..security import require_user_api
@@ -161,19 +165,20 @@ def delete_version(resume_id: int, version_id: int, user: User = Depends(require
 # ------------------------------------------------------------------ AI
 
 
-async def _metered(user: User, db: Session, fn, *args):
-    """Run an AI call, charging one credit and refunding it on failure."""
-    if not consume_ai_credit(user):
+def _remaining(db: Session, user: User, feature: str) -> int | None:
+    return plans.remaining(db, user, feature)
+
+
+async def _metered(user: User, db: Session, feature: str, fn, *args):
+    """Run an AI call, charging one use of `feature` and refunding it on failure."""
+    if not plans.consume(db, user, feature):
         db.commit()
-        detail = "You've used all AI credits for this month."
-        if not user.is_pro:
-            detail += f" Upgrade to Pro for {PRO.ai_credits_per_month} credits/month."
-        raise HTTPException(status_code=402, detail=detail)
+        raise HTTPException(status_code=402, detail=plans.upgrade_hint(user, feature))
     db.commit()
     try:
         result = await run_in_threadpool(fn, *args)
-    except ai.AIError as e:
-        refund_ai_credit(user)
+    except AIError as e:
+        plans.refund(db, user, feature)
         db.commit()
         raise HTTPException(status_code=502, detail=str(e)) from e
     return result
@@ -182,28 +187,140 @@ async def _metered(user: User, db: Session, fn, *args):
 @router.post("/ai/bullets")
 async def ai_bullets(body: BulletsIn, user: User = Depends(require_user_api),
                      db: Session = Depends(get_db)):
-    bullets = await _metered(user, db, ai.rewrite_bullets, body.bullets, body.position,
-                             body.company, body.job_description)
-    return {"bullets": bullets, "credits_left": ai_credits_left(user)}
+    bullets = await _metered(user, db, "chat", ai.rewrite_bullets, body.bullets,
+                             body.position, body.company, body.job_description)
+    return {"bullets": bullets, "credits_left": _remaining(db, user, "chat")}
 
 
 @router.post("/ai/summary")
 async def ai_summary(body: ResumeJobIn, user: User = Depends(require_user_api),
                      db: Session = Depends(get_db)):
     data = ResumeData.model_validate(body.data)
-    summary = await _metered(user, db, ai.write_summary, data, body.job_description)
-    return {"summary": summary, "credits_left": ai_credits_left(user)}
+    summary = await _metered(user, db, "chat", ai.write_summary, data, body.job_description)
+    return {"summary": summary, "credits_left": _remaining(db, user, "chat")}
 
 
 @router.post("/ai/tailor")
 async def ai_tailor(body: ResumeJobIn, user: User = Depends(require_user_api),
                     db: Session = Depends(get_db)):
     data = ResumeData.model_validate(body.data)
-    result = await _metered(user, db, ai.tailor, data, body.job_description)
-    return {**result.model_dump(), "credits_left": ai_credits_left(user)}
+    result = await _metered(user, db, "tailor", ai.tailor, data, body.job_description)
+    return {**result.model_dump(), "tailor_left": _remaining(db, user, "tailor")}
 
 
 @router.post("/keywords")
 def keywords(body: ResumeJobIn, user: User = Depends(require_user_api)):
     data = ResumeData.model_validate(body.data)
     return keyword_report(resume_plain_text(data), body.job_description)
+
+
+# ------------------------------------------------------------------ import
+
+
+@router.post("/resumes/import")
+async def import_resume(file: UploadFile = File(...), user: User = Depends(require_user_api),
+                        db: Session = Depends(get_db)):
+    plan = plans.plan_for(user)
+    if plan.max_resumes is not None and len(user.resumes) >= plan.max_resumes:
+        raise HTTPException(status_code=402, detail=(
+            f"The Free plan includes {plan.max_resumes} resumes. Delete one or upgrade to "
+            "Pro for unlimited uploads."))
+    content = await file.read(MAX_UPLOAD + 1)
+    try:
+        text = await run_in_threadpool(extract_text, file.filename or "", content)
+        data = await run_in_threadpool(ai_features.import_resume, text)
+    except ExtractError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except AIError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    title = (file.filename or "Imported resume").rsplit(".", 1)[0][:200] or "Imported resume"
+    resume = Resume(user_id=user.id, title=title, data=data.model_dump())
+    db.add(resume)
+    db.commit()
+    return {**_resume_out(resume), "url": f"/app/resumes/{resume.id}#analysis"}
+
+
+# ------------------------------------------------------------------ analysis
+
+
+@router.post("/ats-check")
+def ats_check(body: PreviewIn, user: User = Depends(require_user_api)):
+    return run_checks(ResumeData.model_validate(body.data))
+
+
+@router.post("/ai/analysis")
+async def ai_analysis(body: ResumeJobIn, user: User = Depends(require_user_api),
+                      db: Session = Depends(get_db)):
+    data = ResumeData.model_validate(body.data)
+    result = await _metered(user, db, "analysis", ai_features.analyze, data,
+                            body.job_description)
+    return {**result.model_dump(), "checks": run_checks(data),
+            "analysis_left": _remaining(db, user, "analysis")}
+
+
+# ------------------------------------------------------------------ coach chat
+
+
+class ChatIn(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    job_description: str = Field(default="", max_length=20000)
+
+
+class ApplyEditIn(BaseModel):
+    edit: ai_features.ResumeEdit
+
+
+def _chat_out(m: ChatMessage) -> dict[str, Any]:
+    return {"id": m.id, "role": m.role, "content": m.content, "edits": m.edits or []}
+
+
+@router.get("/resumes/{resume_id}/chat")
+def chat_history(resume_id: int, user: User = Depends(require_user_api),
+                 db: Session = Depends(get_db)):
+    resume = owned_resume(db, user, resume_id)
+    rows = db.scalars(select(ChatMessage).where(ChatMessage.resume_id == resume.id)
+                      .order_by(ChatMessage.id)).all()
+    return {"messages": [_chat_out(m) for m in rows],
+            "credits_left": _remaining(db, user, "chat")}
+
+
+@router.post("/resumes/{resume_id}/chat")
+async def chat_send(resume_id: int, body: ChatIn, user: User = Depends(require_user_api),
+                    db: Session = Depends(get_db)):
+    resume = owned_resume(db, user, resume_id)
+    data = ResumeData.model_validate(resume.data)
+    history = [{"role": m.role, "content": m.content} for m in db.scalars(
+        select(ChatMessage).where(ChatMessage.resume_id == resume.id)
+        .order_by(ChatMessage.id.desc()).limit(20)).all()][::-1]
+    reply = await _metered(user, db, "chat", ai_features.chat, data, history, body.message,
+                           body.job_description)
+    user_msg = ChatMessage(resume_id=resume.id, role="user", content=body.message)
+    bot_msg = ChatMessage(resume_id=resume.id, role="assistant", content=reply.reply,
+                          edits=[e.model_dump() for e in reply.edits])
+    db.add_all([user_msg, bot_msg])
+    db.commit()
+    return {"user": _chat_out(user_msg), "assistant": _chat_out(bot_msg),
+            "credits_left": _remaining(db, user, "chat")}
+
+
+@router.delete("/resumes/{resume_id}/chat")
+def chat_clear(resume_id: int, user: User = Depends(require_user_api),
+               db: Session = Depends(get_db)):
+    resume = owned_resume(db, user, resume_id)
+    for m in db.scalars(select(ChatMessage).where(ChatMessage.resume_id == resume.id)):
+        db.delete(m)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/resumes/{resume_id}/apply-edit")
+def apply_edit(resume_id: int, body: ApplyEditIn, user: User = Depends(require_user_api),
+               db: Session = Depends(get_db)):
+    resume = owned_resume(db, user, resume_id)
+    data = ResumeData.model_validate(resume.data)
+    if not ai_features.valid_edit(data, body.edit):
+        raise HTTPException(status_code=409, detail=(
+            "This suggestion no longer matches your resume (it may have changed)."))
+    resume.data = ai_features.apply_edit(data, body.edit).model_dump()
+    db.commit()
+    return {"data": resume.data}

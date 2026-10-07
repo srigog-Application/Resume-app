@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from conftest import get_user, set_user
+from conftest import used
 
 from app import ai
 from app.resume_data import sample_resume
@@ -18,12 +18,13 @@ def test_demo_mode_bullets_consume_credit(user_client):
     body = r.json()
     assert body["bullets"][0].startswith("Managed reports")
     assert "[X%]" in body["bullets"][0]
-    assert body["credits_left"] == 9
-    assert get_user(user_client.email).ai_credits_used == 1
+    assert body["credits_left"] == 19
+    assert used(user_client.email, "chat") == 1
 
 
 def test_credits_exhausted_returns_402(user_client):
-    set_user(user_client.email, ai_credits_used=10)
+    for _ in range(20):
+        assert user_client.post("/api/ai/bullets", json={"bullets": ["x"]}).status_code == 200
     r = user_client.post("/api/ai/bullets", json={"bullets": ["did things"]})
     assert r.status_code == 402
     assert "Upgrade" in r.json()["detail"]
@@ -32,7 +33,7 @@ def test_credits_exhausted_returns_402(user_client):
 def test_failed_ai_call_refunds_credit(user_client):
     r = user_client.post("/api/ai/bullets", json={"bullets": ["   "]})
     assert r.status_code == 502
-    assert get_user(user_client.email).ai_credits_used == 0
+    assert used(user_client.email, "chat") == 0
 
 
 def test_tailor_demo_and_keywords(user_client):

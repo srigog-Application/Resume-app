@@ -1,0 +1,36 @@
+{# Pricing cards. Needs: free, pro, elite (Plan objects), optional user. #}
+{% macro quota(plan, key, unit) %}{% set q = plan.quotas[key] %}{{ 'Unlimited' if q is none else q }} {{ unit }}{% endmacro %}
+<div class="pricing pricing-3">
+  {% for p in [free, pro, elite] %}
+  <div class="card price-card {{ 'featured' if p.key == 'pro' }}">
+    <h3>{{ p.name }}</h3>
+    <div class="price">{{ p.price_label }} <small>{{ 'forever' if p.key == 'free' else '/ month' }}</small></div>
+    <ul class="checklist">
+      <li>{{ quota(p, 'analysis', 'resume analyses') }}{{ '' if p.quotas.analysis is none else ' / mo' }}</li>
+      <li>{{ quota(p, 'tailor', 'job tailorings') }}{{ '' if p.quotas.tailor is none else ' / mo' }}</li>
+      <li>{{ quota(p, 'cover_letter', 'cover letters') }} / mo</li>
+      <li>{{ quota(p, 'chat', 'AI coach & rewrite credits') }} / mo</li>
+      <li>{{ 'Unlimited resumes & uploads' if p.max_resumes is none else p.max_resumes ~ ' resumes' }}</li>
+      <li>{{ 'All ' ~ TEMPLATES|length ~ ' templates' if p.templates == 'all' else '3 ATS-friendly templates' }}</li>
+      <li>Job tracker &amp; PDF export</li>
+      <li>{{ 'Unlimited version history' if p.max_versions_per_resume is none else p.max_versions_per_resume ~ ' versions per resume' }}</li>
+    </ul>
+    {% if not user %}
+      <a class="btn {{ 'btn-primary' if p.key == 'pro' else 'btn-secondary' }} btn-block" href="/signup{{ '' if p.key == 'free' else '?next=/app/account' }}">{{ 'Start for free' if p.key == 'free' else 'Get ' ~ p.name }}</a>
+    {% elif user.plan == p.key %}
+      <button class="btn btn-secondary btn-block" disabled>Your current plan</button>
+    {% elif p.key == 'free' %}
+      <span></span>
+    {% elif user.is_pro %}
+      {% if settings.billing_enabled and user.stripe_customer_id %}
+      <form method="post" action="/billing/portal"><button class="btn btn-secondary btn-block">Switch to {{ p.name }}</button></form>
+      {% endif %}
+    {% elif settings.billing_enabled and settings.price_for(p.key) %}
+      <form method="post" action="/billing/checkout"><input type="hidden" name="plan" value="{{ p.key }}">
+        <button class="btn {{ 'btn-primary' if p.key == 'pro' else 'btn-secondary' }} btn-block">Upgrade to {{ p.name }}</button></form>
+    {% else %}
+      <div class="alert alert-info tiny" style="margin:0">Billing isn't configured on this server yet (see README).</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>

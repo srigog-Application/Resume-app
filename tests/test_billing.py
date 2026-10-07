@@ -87,7 +87,7 @@ def _stripe_obj(data):
 def test_checkout_and_success_sync(user_client, override_settings, monkeypatch):
     import stripe
 
-    override_settings(stripe_secret_key="sk_test_123", stripe_price_id="price_123")
+    override_settings(stripe_secret_key="sk_test_123", stripe_price_pro="price_123")
     uid = get_user(user_client.email).id
     created = {}
 
@@ -119,7 +119,7 @@ def test_checkout_and_success_sync(user_client, override_settings, monkeypatch):
 def test_checkout_completed_webhook(user_client, override_settings, monkeypatch):
     import stripe
 
-    override_settings(stripe_secret_key="sk_test_123", stripe_price_id="price_123")
+    override_settings(stripe_secret_key="sk_test_123", stripe_price_pro="price_123")
     uid = get_user(user_client.email).id
     monkeypatch.setattr(stripe.Subscription, "retrieve", staticmethod(lambda sid: _stripe_obj(
         {"id": sid, "object": "subscription", "status": "trialing", "customer": "cus_7"})))

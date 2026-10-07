@@ -79,3 +79,12 @@ def override_settings():
     yield _set
     for k, v in original.items():
         object.__setattr__(settings, k, v)
+
+
+def used(email: str, feature: str) -> int:
+    from app.models import Usage
+
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email=email).one()
+        rows = db.query(Usage).filter_by(user_id=user.id, feature=feature).all()
+        return sum(r.count for r in rows)

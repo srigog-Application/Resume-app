@@ -56,8 +56,10 @@ class Settings:
 
     stripe_secret_key: str = field(default_factory=lambda: _env("STRIPE_SECRET_KEY"))
     stripe_webhook_secret: str = field(default_factory=lambda: _env("STRIPE_WEBHOOK_SECRET"))
-    stripe_price_id: str = field(default_factory=lambda: _env("STRIPE_PRICE_ID"))
-    pro_price_label: str = field(default_factory=lambda: _env("PRO_PRICE_LABEL", "$12"))
+    # STRIPE_PRICE_ID is accepted as an alias for the Pro price (older configs).
+    stripe_price_pro: str = field(
+        default_factory=lambda: _env("STRIPE_PRICE_PRO") or _env("STRIPE_PRICE_ID"))
+    stripe_price_elite: str = field(default_factory=lambda: _env("STRIPE_PRICE_ELITE"))
 
     @property
     def is_production(self) -> bool:
@@ -69,7 +71,17 @@ class Settings:
 
     @property
     def billing_enabled(self) -> bool:
-        return bool(self.stripe_secret_key and self.stripe_price_id)
+        return bool(self.stripe_secret_key and self.stripe_price_pro)
+
+    def price_for(self, plan: str) -> str:
+        return {"pro": self.stripe_price_pro, "elite": self.stripe_price_elite}.get(plan, "")
+
+    def plan_for_price(self, price_id: str | None) -> str | None:
+        if price_id and price_id == self.stripe_price_elite:
+            return "elite"
+        if price_id and price_id == self.stripe_price_pro:
+            return "pro"
+        return None
 
 
 def load_settings() -> Settings:

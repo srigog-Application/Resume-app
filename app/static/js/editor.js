@@ -7,7 +7,13 @@
   const RID = boot.resumeId;
   const TEMPLATES = boot.templates;
   let data = boot.data;
-  let creditsLeft = boot.creditsLeft;
+  const left = { ...boot.left }; // remaining uses per feature; null = unlimited
+  const hasLeft = (f) => left[f] === null || left[f] > 0;
+  const OUT_MSG = {
+    chat: 'You are out of AI coach & rewrite credits this month. Upgrade for more.',
+    tailor: 'You are out of job tailorings this month. Upgrade for more.',
+    analysis: 'You are out of resume analyses this month. Upgrade for more.',
+  };
 
   // ------------------------------------------------------------ helpers
   function h(tag, attrs = {}, ...children) {
@@ -70,11 +76,11 @@
     setTimeout(() => el.remove(), 6000);
   }
 
-  function setCredits(n) {
-    if (typeof n !== 'number') return;
-    creditsLeft = n;
-    $('#credits').textContent = `✨ ${n} credits`;
+  function setLeft(feature, n) {
+    if (n !== undefined) left[feature] = n;
+    if (feature === 'chat') $('#credits').textContent = left.chat === null ? '✨ Unlimited' : `✨ ${left.chat} credits`;
   }
+  const setCredits = (n) => setLeft('chat', n);
 
   // ------------------------------------------------------------ save + preview
   let saveTimer = null, previewTimer = null, saving = false, dirty = false, previewSeq = 0;
@@ -156,10 +162,10 @@
       opts.hint ? h('div', { class: 'hint', text: opts.hint }) : null);
   }
 
-  function aiButton(label, onclick) {
+  function aiButton(label, onclick, feature = 'chat') {
     const btn = h('button', { class: 'btn btn-ai btn-sm', type: 'button' }, `✨ ${label}`);
     btn.addEventListener('click', async () => {
-      if (creditsLeft <= 0) { toast('You are out of AI credits this month. Upgrade to Pro for more.', 'warning'); return; }
+      if (!hasLeft(feature)) { toast(OUT_MSG[feature], 'warning'); return; }
       const original = btn.textContent;
       btn.disabled = true;
       btn.replaceChildren(h('span', { class: 'spinner' }), ' Thinking…');
@@ -232,7 +238,7 @@
             onclick: async (e) => {
               const btn = e.currentTarget;
               if (!list[i].trim()) return;
-              if (creditsLeft <= 0) { toast('You are out of AI credits this month. Upgrade to Pro for more.', 'warning'); return; }
+              if (!hasLeft('chat')) { toast(OUT_MSG.chat, 'warning'); return; }
               btn.disabled = true; btn.replaceChildren(h('span', { class: 'spinner' }));
               try {
                 const res = await api('POST', '/api/ai/bullets', { bullets: [list[i]], ...ctx.ai() });
@@ -280,6 +286,7 @@
 
   // ------------------------------------------------------------ steps
   const jobKey = `jd-${RID}`;
+  let lastAnalysis = null;
   const store = {
     get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
@@ -293,7 +300,8 @@
     { key: 'projects', label: 'Projects', icon: '🚀', done: () => data.projects.some(p => p.name), render: stepProjects },
     { key: 'extras', label: 'Certifications', icon: '🏅', done: () => data.certifications.some(c => c.name), render: stepExtras },
     { key: 'summary', label: 'Summary', icon: '📝', done: () => !!data.summary, render: stepSummary },
-    { key: 'design', label: 'Design', icon: '🎨', divider: true, done: () => true, render: stepDesign },
+    { key: 'design', label: 'Design', icon: '🎨', done: () => true, render: stepDesign },
+    { key: 'analysis', label: 'Analysis', icon: '🔍', divider: true, done: () => !!lastAnalysis, render: stepAnalysis },
     { key: 'tailor', label: 'Tailor to a job', icon: '🎯', done: () => false, render: stepTailor },
   ];
   let current = 0;
@@ -493,39 +501,57 @@
     return out;
   }
 
+  function jobSelect(onPick) {
+    if (!boot.jobs.length) return null;
+    const sel = h('select', { onchange: (e) => onPick(boot.jobs.find(j => j.id === Number(e.target.value))) },
+      h('option', { value: '', text: 'Choose a job from your tracker…' }),
+      boot.jobs.map(j => h('option', { value: String(j.id), text: [j.title, j.company].filter(Boolean).join(' · ') || 'Untitled job' })));
+    const cur = boot.jobs.find(j => j.description && j.description === store.get(jobKey));
+    if (cur) sel.value = String(cur.id);
+    return h('div', { class: 'field' }, h('label', { text: 'Target job' }), sel);
+  }
+
   function stepTailor() {
-    const out = h('div', {}, head('Tailor to a job', 'Paste a job description to see how well you match. Then let AI tailor your summary and bullets.'));
+    const out = h('div', {}, head('Tailor to a job', 'Pick a tracked job or paste a description. See your match, then accept or reject each AI suggestion.'));
     const ta = h('textarea', { rows: 9, placeholder: 'Paste the full job description here…', value: store.get(jobKey),
       oninput: (e) => store.set(jobKey, e.target.value) });
+    out.append(jobSelect((job) => { if (job) { ta.value = job.description; store.set(jobKey, job.description); } }));
     out.append(h('div', { class: 'field' }, h('label', { text: 'Job description' }), ta));
     const results = h('div');
+    const tooShort = () => ta.value.trim().length < 80;
     const checkBtn = h('button', { class: 'btn btn-secondary', type: 'button', onclick: async () => {
-      if (ta.value.trim().length < 80) { toast('Paste the full job description (at least a few sentences).', 'info'); return; }
+      if (tooShort()) { toast('Paste the full job description (at least a few sentences).', 'info'); return; }
       try { showScore(results, await api('POST', '/api/keywords', { data, job_description: ta.value })); }
       catch (e) { toast(e.message, 'error'); }
     } }, '📊 Check match score (free)');
     const tailorBtn = aiButton('Tailor my resume', async () => {
-      if (ta.value.trim().length < 80) { toast('Paste the full job description (at least a few sentences).', 'info'); return; }
+      if (tooShort()) { toast('Paste the full job description (at least a few sentences).', 'info'); return; }
       await flushSave();
       const [score, res] = await Promise.all([
         api('POST', '/api/keywords', { data, job_description: ta.value }),
         api('POST', '/api/ai/tailor', { data, job_description: ta.value }),
       ]);
-      setCredits(res.credits_left);
+      setLeft('tailor', res.tailor_left);
       showScore(results, score);
       showTailoring(results, res);
-    });
-    out.append(h('div', { class: 'row' }, checkBtn, tailorBtn), h('div', { style: 'height:16px' }), results);
+    }, 'tailor');
+    const leftText = left.tailor === null ? 'Unlimited tailorings' : `${left.tailor} tailoring${left.tailor === 1 ? '' : 's'} left this month`;
+    out.append(h('div', { class: 'row' }, checkBtn, tailorBtn, h('span', { class: 'tiny muted', text: leftText })),
+      h('div', { style: 'height:16px' }), results);
     if (!boot.aiEnabled) out.append(h('p', { class: 'hint', text: 'Demo mode: the server has no ANTHROPIC_API_KEY, so AI suggestions are simple heuristics.' }));
     return out;
   }
 
+  function scoreRing(score, size = 72) {
+    const color = score >= 75 ? 'var(--success)' : score >= 50 ? '#ca8a04' : 'var(--danger)';
+    return h('div', { class: 'score-ring', style: `width:${size}px;height:${size}px;--p:${score}; background: conic-gradient(${color} calc(var(--p) * 1%), var(--surface-2) 0)` },
+      h('b', { style: `width:${size - 16}px;height:${size - 16}px`, text: String(score) }));
+  }
+
   function showScore(container, rep) {
     container.querySelector('.score-card')?.remove();
-    const color = rep.score >= 75 ? 'var(--success)' : rep.score >= 50 ? '#ca8a04' : 'var(--danger)';
     const card = h('div', { class: 'card score-card', style: 'margin-bottom:14px' },
-      h('div', { class: 'score-box' },
-        h('div', { class: 'score-ring', style: `--p:${rep.score}; background: conic-gradient(${color} calc(var(--p) * 1%), var(--surface-2) 0)` }, h('b', { text: String(rep.score) })),
+      h('div', { class: 'score-box' }, scoreRing(rep.score),
         h('div', {},
           h('b', { text: 'Keyword match' }),
           h('div', { class: 'small muted', text: `${rep.matched.length} of ${rep.matched.length + rep.missing.length} key terms from the job appear in your resume.` }))),
@@ -537,51 +563,223 @@
     container.prepend(card);
   }
 
+  /** Tailoring suggestions, each accepted or rejected individually. */
   function showTailoring(container, res) {
     container.querySelector('.tailor-card')?.remove();
-    const pending = { summary: res.summary, experience: res.experience, skills: res.skills_to_add };
-    const applyTo = (target) => {
-      if (pending.summary) target.summary = pending.summary;
-      for (const e of pending.experience) if (target.experience[e.index]) target.experience[e.index].bullets = e.bullets.slice();
-      if (pending.skills.length) {
-        let group = target.skills.find(s => /additional|other/i.test(s.label));
-        if (!group) { group = { label: 'Additional', details: '' }; target.skills.push(group); }
+    const items = [];
+    if (res.summary) items.push({ label: 'Summary', old: [data.summary].filter(Boolean), neu: [res.summary], apply: (d) => { d.summary = res.summary; } });
+    for (const e of res.experience) {
+      const src = data.experience[e.index];
+      if (!src) continue;
+      items.push({ label: [src.position, src.company].filter(Boolean).join(' · ') || `Position ${e.index + 1}`,
+        old: src.bullets.filter(b => b.trim()), neu: e.bullets, apply: (d) => { d.experience[e.index].bullets = e.bullets.slice(); } });
+    }
+    if (res.skills_to_add.length) {
+      items.push({ label: 'Add skills', old: [], neu: [res.skills_to_add.join(', ')], apply: (d) => {
+        let group = d.skills.find(s => /additional|other/i.test(s.label));
+        if (!group) { group = { label: 'Additional', details: '' }; d.skills.push(group); }
         const existing = group.details ? group.details.split(/,\s*/) : [];
-        group.details = [...new Set([...existing, ...pending.skills])].filter(Boolean).join(', ');
-      }
-      return target;
-    };
+        group.details = [...new Set([...existing, ...res.skills_to_add])].filter(Boolean).join(', ');
+      } });
+    }
 
     const card = h('div', { class: 'suggest tailor-card' },
       h('div', { class: 'suggest-head' }, '✨ Tailoring suggestions'),
-      res.notes?.length ? h('ul', {}, res.notes.map(n => h('li', { text: n }))) : null);
+      res.notes?.length ? h('ul', {}, res.notes.map(n => h('li', { text: n }))) : null,
+      h('div', { class: 'row', style: 'margin-bottom:10px' },
+        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async (ev) => {
+          try { await flushSave(); await api('POST', `/api/resumes/${RID}/versions`, { label: 'Before tailoring' }); toast('Saved version “Before tailoring”.', 'success'); ev.target.disabled = true; }
+          catch (e) { toast(e.message, e.status === 402 ? 'warning' : 'error'); }
+        } }, '🕘 Save a version first'),
+        h('span', { class: 'tiny muted', text: 'Accepting changes edits this resume.' })));
 
-    card.append(h('h4', { text: 'Summary' }), h('p', { class: 'diff-new' }, withPlaceholders(res.summary)));
-    for (const e of res.experience) {
-      const src = data.experience[e.index];
-      card.append(h('h4', { text: [src.position, src.company].filter(Boolean).join(' · ') || `Position ${e.index + 1}` }),
-        h('ul', {}, e.bullets.map(b => h('li', { class: 'diff-new' }, withPlaceholders(b)))));
+    for (const it of items) {
+      // Accepting edits `data` in place (no re-render, so the other suggestions stay put).
+      const mark = (state) => {
+        if (it.done) return;
+        it.done = state;
+        if (state === 'accepted') { it.apply(data); changed(); }
+        row.classList.add(state);
+        row.querySelector('.accept-row').replaceChildren(h('span', { class: 'tiny muted', text: state === 'accepted' ? 'Applied ✓' : 'Rejected' }));
+      };
+      const row = h('div', { class: 'sugg-item' },
+        h('div', { class: 'row', style: 'margin-bottom:6px' }, h('b', { class: 'small', text: it.label }), h('div', { class: 'spacer' }),
+          h('div', { class: 'accept-row' },
+            h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => mark('accepted') }, '✓ Accept'),
+            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => mark('rejected') }, '✕ Reject'))),
+        it.old.length ? h('ul', {}, it.old.map(b => h('li', { class: 'diff-old', text: b }))) : null,
+        h('ul', {}, it.neu.map(b => h('li', { class: 'diff-new' }, withPlaceholders(b)))));
+      it.mark = mark;
+      card.append(row);
     }
-    if (res.skills_to_add.length) {
-      card.append(h('h4', { text: 'Skills to add' }), h('div', { class: 'chips', style: 'margin-bottom:10px' }, res.skills_to_add.map(s => h('span', { class: 'chip', text: s }))));
-    }
-    card.append(h('p', { class: 'hint', text: 'Tip: save a version first so you can always go back to your original.' }),
-      h('div', { class: 'row' },
-        h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: async () => {
-          applyTo(data); changed(); toast('Applied tailoring to this resume.', 'success'); card.remove();
-        } }, 'Apply to this resume'),
-        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async () => {
-          const title = prompt('Name the tailored copy', `${$('#title').value} (tailored)`);
-          if (!title) return;
-          try {
-            await flushSave();
-            const copy = applyTo(structuredClone(data));
-            const out = await api('POST', `/api/resumes/${RID}/duplicate`, { title, data: copy });
-            window.location = out.url;
-          } catch (e) { toast(e.message, e.status === 402 ? 'warning' : 'error'); }
-        } }, 'Save as tailored copy'),
-        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => card.remove() }, 'Dismiss')));
+    card.append(h('div', { class: 'row' },
+      h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => {
+        items.forEach(it => it.mark && !it.done && it.mark('accepted'));
+        toast('Applied all remaining suggestions.', 'success');
+      } }, 'Accept all remaining'),
+      h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async () => {
+        const title = prompt('Name the tailored copy', `${$('#title').value} (tailored)`);
+        if (!title) return;
+        try {
+          await flushSave();
+          const copy = structuredClone(data);
+          // The copy gets every suggestion not rejected; already-accepted ones are in `data`.
+          items.forEach(it => { if (!it.done) it.apply(copy); });
+          const out = await api('POST', `/api/resumes/${RID}/duplicate`, { title, data: copy });
+          window.location = out.url;
+        } catch (e) { toast(e.message, e.status === 402 ? 'warning' : 'error'); }
+      } }, 'Save as tailored copy instead'),
+      h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => card.remove() }, 'Dismiss')));
     container.append(card);
+  }
+
+  // ------------------------------------------------------------ analysis
+  function stepAnalysis() {
+    const jd = store.get(jobKey);
+    const out = h('div', {}, head('Resume analysis', 'Instant ATS checks are free. Run the AI review for a section-by-section critique' + (jd ? ' against your target job.' : '.')));
+    const checksBox = h('div', { class: 'card card-pad', style: 'margin-bottom:16px' }, h('span', { class: 'spinner' }), ' Running ATS checks…');
+    out.append(checksBox);
+    api('POST', '/api/ats-check', { data }).then((r) => renderChecks(checksBox, r)).catch((e) => { checksBox.textContent = e.message; });
+
+    const aiBox = h('div');
+    const leftText = left.analysis === null ? 'Unlimited AI reviews' : `${left.analysis} AI review${left.analysis === 1 ? '' : 's'} left this month`;
+    out.append(h('div', { class: 'row', style: 'margin-bottom:14px' }, aiButton(lastAnalysis ? 'Re-run AI review' : 'Run AI recruiter review', async () => {
+      await flushSave();
+      const res = await api('POST', '/api/ai/analysis', { data, job_description: store.get(jobKey) });
+      setLeft('analysis', res.analysis_left);
+      lastAnalysis = res; renderNav(); renderAnalysis(aiBox, res);
+    }, 'analysis'), h('span', { class: 'tiny muted', text: leftText })), aiBox);
+    if (lastAnalysis) renderAnalysis(aiBox, lastAnalysis);
+    return out;
+  }
+
+  function renderChecks(box, r) {
+    const failed = r.checks.filter(c => !c.passed);
+    box.replaceChildren(
+      h('div', { class: 'row', style: 'flex-wrap:nowrap;margin-bottom:10px' }, scoreRing(r.score, 64),
+        h('div', {}, h('b', { text: 'ATS readiness' }), h('div', { class: 'small muted', text: failed.length ? `${failed.length} thing${failed.length > 1 ? 's' : ''} to fix` : 'Every check passes. Nice!' }))),
+      ...[...failed, ...r.checks.filter(c => c.passed)].map(c => h('div', { class: `check ${c.passed ? 'ok' : 'bad'}` },
+        h('span', { class: 'mark' }, c.passed ? '✓' : '!'), h('span', { text: c.detail }))));
+  }
+
+  function renderAnalysis(box, res) {
+    const color = (n) => n >= 75 ? 'var(--success)' : n >= 50 ? '#ca8a04' : 'var(--danger)';
+    box.replaceChildren(
+      h('div', { class: 'card score-card', style: 'margin-bottom:14px' },
+        h('div', { class: 'score-box' }, scoreRing(res.overall_score),
+          h('div', {}, h('b', { text: 'AI recruiter review' }), h('div', { class: 'small muted', text: res.verdict }))),
+        h('div', { style: 'padding:0 16px 16px' },
+          h('b', { class: 'small', text: 'Top fixes' }),
+          h('ol', { class: 'small', style: 'padding-left:20px;margin:6px 0 10px' }, res.top_fixes.map(f => h('li', { text: f }))),
+          h('button', { class: 'btn btn-ai btn-sm', type: 'button', onclick: () => openCoach(`Help me fix the top issues from my analysis: ${res.top_fixes.slice(0, 3).join(' | ')}`) }, '💬 Fix these with the AI coach'),
+          res.missing_keywords.length ? h('div', { style: 'margin-top:12px' }, h('b', { class: 'small', text: 'Missing keywords' }),
+            h('div', { class: 'chips', style: 'margin-top:6px' }, res.missing_keywords.map(k => h('span', { class: 'chip miss', text: k })))) : null)),
+      ...res.sections.map(s => h('div', { class: 'card section-review' },
+        h('div', { class: 'row' }, h('b', { text: s.section }), h('div', { class: 'spacer' }), h('b', { style: `color:${color(s.score)}`, text: `${s.score}/100` })),
+        h('div', { class: 'bar' }, h('span', { style: `width:${s.score}%;background:${color(s.score)}` })),
+        s.strengths.length ? h('div', { class: 'small' }, h('b', { text: 'Strengths' }), h('ul', {}, s.strengths.map(x => h('li', { text: x })))) : null,
+        s.issues.length ? h('div', { class: 'small' }, h('b', { text: 'Issues' }), h('ul', {}, s.issues.map(x => h('li', { text: x })))) : null,
+        s.suggestions.length ? h('div', { class: 'small' }, h('b', { text: 'Suggestions' }), h('ul', {}, s.suggestions.map(x => h('li', { text: x })))) : null)));
+  }
+
+  // ------------------------------------------------------------ AI coach
+  const EDIT_LABEL = {
+    summary: () => 'New summary', headline: () => 'New headline',
+    experience_bullets: (e) => { const x = data.experience[e.index]; return `Bullets · ${[x?.position, x?.company].filter(Boolean).join(' at ') || 'position'}`; },
+    project_bullets: (e) => `Project bullets · ${data.projects[e.index]?.name || 'project'}`,
+    skill_group: (e) => `Skills · ${e.label}`,
+  };
+
+  function editCard(edit) {
+    const lines = edit.items && edit.items.length ? edit.items : [edit.text];
+    const card = h('div', { class: 'edit-card' },
+      h('div', { class: 'why', text: `${EDIT_LABEL[edit.kind](edit)}. ${edit.reason}` }),
+      h('ul', {}, lines.map(l => h('li', {}, withPlaceholders(l)))));
+    const status = h('span', { class: 'tiny muted' });
+    const accept = h('button', { class: 'btn btn-primary btn-sm', type: 'button' }, '✓ Accept');
+    const reject = h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, '✕ Reject');
+    accept.addEventListener('click', async () => {
+      try {
+        await flushSave();
+        const res = await api('POST', `/api/resumes/${RID}/apply-edit`, { edit });
+        data = res.data; renderStep(); refreshPreview();
+        card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Applied ✓';
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    reject.addEventListener('click', () => { card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Rejected'; });
+    card.append(h('div', { class: 'accept-row' }, accept, reject, status));
+    return card;
+  }
+
+  let coachOpen = null;
+  async function openCoach(prefill = '') {
+    if (coachOpen) { coachOpen(); }
+    const backdrop = h('div', { class: 'drawer-backdrop', onclick: () => close() });
+    const log = h('div', { class: 'chat-log', 'aria-live': 'polite' });
+    const input = h('textarea', { rows: 2, placeholder: 'Ask anything: “Make my Acme bullets stronger”, “Is my summary too long?”…', value: prefill });
+    const send = h('button', { class: 'btn btn-primary', type: 'button' }, 'Send');
+    const creditsEl = h('span', { class: 'tiny muted' });
+    const updateCredits = () => { creditsEl.textContent = left.chat === null ? 'Unlimited credits' : `${left.chat} credits left`; };
+    const starters = ['Make my most recent role stand out', 'What is the weakest part of my resume?', 'Write a summary for my target job', 'Add metrics to my bullets'];
+    const chips = h('div', { class: 'chips-suggest' }, starters.map(t => h('button', { type: 'button', onclick: () => { input.value = t; doSend(); } }, t)));
+
+    const drawer = h('aside', { class: 'drawer wide', role: 'dialog', 'aria-label': 'AI resume coach' },
+      h('div', { class: 'drawer-head' }, h('h3', { text: '💬 AI resume coach' }), creditsEl,
+        h('button', { class: 'icon-btn', title: 'Clear conversation', 'aria-label': 'Clear conversation', onclick: async () => {
+          if (!confirm('Clear this conversation?')) return;
+          await api('DELETE', `/api/resumes/${RID}/chat`); log.replaceChildren(); log.append(chips);
+        } }, '🗑'),
+        h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, '✕')),
+      h('div', { class: 'chat' }, log, h('div', { class: 'chat-input' }, input, send)));
+    drawer.style.display = 'flex';
+    const close = () => { backdrop.remove(); drawer.remove(); document.removeEventListener('keydown', onKey); coachOpen = null; };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    coachOpen = close;
+    document.addEventListener('keydown', onKey);
+    document.body.append(backdrop, drawer);
+    input.focus();
+    updateCredits();
+
+    const addMsg = (m) => {
+      const el = h('div', { class: `msg ${m.role}` }, m.content);
+      if (m.role === 'assistant') for (const e of m.edits || []) el.append(editCard(e));
+      log.append(el); log.scrollTop = log.scrollHeight;
+      return el;
+    };
+
+    try {
+      const hist = await api('GET', `/api/resumes/${RID}/chat`);
+      setLeft('chat', hist.credits_left); updateCredits();
+      if (!hist.messages.length) {
+        log.append(h('div', { class: 'msg assistant' }, "Hi! I can review sections, rewrite bullets, or help target a specific job. I'll ask about your real results before rewriting, so nothing gets invented. Where should we start?"), chips);
+      }
+      hist.messages.forEach(addMsg);
+    } catch (e) { log.append(h('div', { class: 'alert alert-error', text: e.message })); }
+
+    async function doSend() {
+      const text = input.value.trim();
+      if (!text || send.disabled) return;
+      if (!hasLeft('chat')) { toast(OUT_MSG.chat, 'warning'); return; }
+      chips.remove();
+      input.value = '';
+      const pending = addMsg({ role: 'user', content: text, edits: [] });
+      const typing = h('div', { class: 'msg assistant' }, h('span', { class: 'spinner' }), ' Thinking…');
+      log.append(typing); log.scrollTop = log.scrollHeight;
+      send.disabled = true;
+      try {
+        await flushSave();
+        const res = await api('POST', `/api/resumes/${RID}/chat`, { message: text, job_description: store.get(jobKey) });
+        typing.remove();
+        addMsg(res.assistant);
+        setLeft('chat', res.credits_left); updateCredits();
+      } catch (e) {
+        typing.remove(); pending.remove(); input.value = text;
+        toast(e.message, e.status === 402 ? 'warning' : 'error');
+      } finally { send.disabled = false; input.focus(); }
+    }
+    send.addEventListener('click', doSend);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
+    if (prefill) doSend();
   }
 
   // ------------------------------------------------------------ versions drawer
@@ -639,6 +837,12 @@
 
   $('#title').addEventListener('input', () => changed({ preview: false }));
   $('#btn-versions').addEventListener('click', openVersions);
+  $('#btn-coach').addEventListener('click', () => openCoach());
+  setLeft('chat');
+  // ?job=ID (from the tracker): make that job the tailoring target.
+  const jobParam = new URLSearchParams(location.search).get('job');
+  const linkedJob = boot.jobs.find(j => j.id === Number(jobParam));
+  if (linkedJob && linkedJob.description) store.set(jobKey, linkedJob.description);
   $('#btn-download').addEventListener('click', downloadClick);
   $('#quick-template').value = data.design.template;
   $('#quick-template').addEventListener('change', (e) => {
