@@ -1,7 +1,7 @@
 """JSON API used by the editor."""
 
 import base64
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import ai, ai_features, plans
-from ..ai import AIError
+from ..ai import AIError, AIInputError
 from ..ats import run_checks
 from ..db import get_db
 from ..extract import MAX_BYTES as MAX_UPLOAD
@@ -45,7 +45,7 @@ class VersionIn(BaseModel):
 
 
 class BulletsIn(BaseModel):
-    bullets: list[str] = Field(max_length=30)
+    bullets: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=30)
     position: str = Field(default="", max_length=200)
     company: str = Field(default="", max_length=200)
     job_description: str = Field(default="", max_length=20000)
@@ -177,10 +177,15 @@ async def _metered(user: User, db: Session, feature: str, fn, *args):
     db.commit()
     try:
         result = await run_in_threadpool(fn, *args)
-    except AIError as e:
+    except BaseException as e:
+        # Never keep a credit for a call that didn't deliver, whatever failed.
         plans.refund(db, user, feature)
         db.commit()
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        if isinstance(e, AIInputError):
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        if isinstance(e, AIError):
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        raise
     return result
 
 
@@ -228,11 +233,10 @@ async def import_resume(file: UploadFile = File(...), user: User = Depends(requi
     content = await file.read(MAX_UPLOAD + 1)
     try:
         text = await run_in_threadpool(extract_text, file.filename or "", content)
-        data = await run_in_threadpool(ai_features.import_resume, text)
     except ExtractError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    except AIError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+    # Importing calls the AI with the whole document, so it is metered.
+    data = await _metered(user, db, "import", ai_features.import_resume, text)
     title = (file.filename or "Imported resume").rsplit(".", 1)[0][:200] or "Imported resume"
     resume = Resume(user_id=user.id, title=title, data=data.model_dump())
     db.add(resume)
@@ -268,6 +272,7 @@ class ChatIn(BaseModel):
 
 class ApplyEditIn(BaseModel):
     edit: ai_features.ResumeEdit
+    target: str | None = Field(default=None, max_length=500)
 
 
 def _chat_out(m: ChatMessage) -> dict[str, Any]:
@@ -295,8 +300,10 @@ async def chat_send(resume_id: int, body: ChatIn, user: User = Depends(require_u
     reply = await _metered(user, db, "chat", ai_features.chat, data, history, body.message,
                            body.job_description)
     user_msg = ChatMessage(resume_id=resume.id, role="user", content=body.message)
+    # Each edit remembers which entry it was written for (see relocate_edit).
     bot_msg = ChatMessage(resume_id=resume.id, role="assistant", content=reply.reply,
-                          edits=[e.model_dump() for e in reply.edits])
+                          edits=[{**e.model_dump(), "target": ai_features.edit_target(data, e)}
+                                 for e in reply.edits])
     db.add_all([user_msg, bot_msg])
     db.commit()
     return {"user": _chat_out(user_msg), "assistant": _chat_out(bot_msg),
@@ -318,9 +325,10 @@ def apply_edit(resume_id: int, body: ApplyEditIn, user: User = Depends(require_u
                db: Session = Depends(get_db)):
     resume = owned_resume(db, user, resume_id)
     data = ResumeData.model_validate(resume.data)
-    if not ai_features.valid_edit(data, body.edit):
+    edit = ai_features.relocate_edit(data, body.edit, body.target)
+    if edit is None:
         raise HTTPException(status_code=409, detail=(
-            "This suggestion no longer matches your resume (it may have changed)."))
-    resume.data = ai_features.apply_edit(data, body.edit).model_dump()
+            "The entry this suggestion was written for has changed or been removed."))
+    resume.data = ai_features.apply_edit(data, edit).model_dump()
     db.commit()
     return {"data": resume.data}

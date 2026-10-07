@@ -66,7 +66,21 @@ def test_import_rejects_bad_files(user_client):
     r = user_client.post("/api/resumes/import", files={"file": ("x.pdf", b"%PDF-garbage", "x")})
     assert r.status_code == 422
     r = user_client.post("/api/resumes/import", files={"file": ("x.txt", b"too short", "x")})
-    assert r.status_code == 502
+    assert r.status_code == 422
+    assert used(user_client.email, "import") == 0  # refunded
+
+
+def test_import_is_metered(user_client):
+    rid = first_resume_id(user_client)
+    user_client.post(f"/app/resumes/{rid}/delete")
+    for _ in range(5):
+        r = user_client.post("/api/resumes/import",
+                             files={"file": ("r.txt", RESUME_TEXT.encode(), "text/plain")})
+        assert r.status_code == 200
+        user_client.post(f"/app/resumes/{r.json()['id']}/delete")  # delete-and-reimport loop
+    r = user_client.post("/api/resumes/import",
+                         files={"file": ("r.txt", RESUME_TEXT.encode(), "text/plain")})
+    assert r.status_code == 402
 
 
 def test_import_respects_resume_limit(user_client):

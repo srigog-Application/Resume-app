@@ -105,8 +105,9 @@
     if (preview) { clearTimeout(previewTimer); previewTimer = setTimeout(refreshPreview, 450); }
   }
 
+  let locked = false; // true while the server replaces the resume (version restore)
   async function save() {
-    if (saving) { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); return; }
+    if (saving || locked) { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); return; }
     if (!dirty) return;
     saving = true; dirty = false;
     saveState.textContent = 'Saving…'; saveState.className = 'save-state';
@@ -115,8 +116,13 @@
       if (!dirty) { saveState.textContent = 'All changes saved'; saveState.className = 'save-state'; }
     } catch (e) {
       dirty = true;
-      saveState.textContent = 'Save failed, retrying…'; saveState.className = 'save-state error';
-      saveTimer = setTimeout(save, 4000);
+      saveState.className = 'save-state error';
+      if (!e.status || e.status >= 500) {
+        saveState.textContent = 'Save failed, retrying…';
+        saveTimer = setTimeout(save, 4000);
+      } else {
+        saveState.textContent = `Not saved: ${e.message}`; // a 4xx won't fix itself by retrying
+      }
     } finally { saving = false; }
   }
 
@@ -581,8 +587,10 @@
     for (const e of res.experience) {
       const src = data.experience[e.index];
       if (!src) continue;
+      const target = sigOf(data, 'experience_bullets', e.index);
       items.push({ label: [src.position, src.company].filter(Boolean).join(' at ') || `Position ${e.index + 1}`,
-        old: src.bullets.filter(b => b.trim()), neu: e.bullets, apply: (d) => { d.experience[e.index].bullets = e.bullets.slice(); } });
+        old: src.bullets.filter(b => b.trim()), neu: e.bullets,
+        apply: (d) => applyEdit(d, { kind: 'experience_bullets', index: e.index, target, items: e.bullets }) });
     }
     if (res.skills_to_add.length) {
       items.push({ label: 'Add skills', old: [], neu: [res.skills_to_add.join(', ')], apply: (d) => {
@@ -608,7 +616,10 @@
       const mark = (state) => {
         if (it.done) return;
         it.done = state;
-        if (state === 'accepted') { it.apply(data); changed(); }
+        if (state === 'accepted') {
+          try { it.apply(data); } catch (err) { it.done = null; toast(err.message, 'error'); return; }
+          changed();
+        }
         row.classList.add(state);
         row.querySelector('.accept-row').replaceChildren(h('span', { class: 'tiny muted', text: state === 'accepted' ? 'Accepted' : 'Rejected' }));
       };
@@ -634,7 +645,7 @@
           await flushSave();
           const copy = structuredClone(data);
           // The copy gets every suggestion not rejected; already-accepted ones are in `data`.
-          items.forEach(it => { if (!it.done) it.apply(copy); });
+          for (const it of items) if (!it.done) { try { it.apply(copy); } catch { /* entry gone: skip */ } }
           const out = await api('POST', `/api/resumes/${RID}/duplicate`, { title, data: copy });
           window.location = out.url;
         } catch (e) { toast(e.message, e.status === 402 ? 'warning' : 'error'); }
@@ -692,6 +703,47 @@
         s.suggestions.length ? h('div', { class: 'small' }, h('b', { text: 'Suggestions' }), h('ul', {}, s.suggestions.map(x => h('li', { text: x })))) : null)));
   }
 
+  // ------------------------------------------------------------ entry targeting
+  // Suggestions remember the entry they were written for by content (title and
+  // company), not list position, so reordering or deleting entries can't make
+  // an accepted suggestion overwrite a different job. Mirrors ai_features.py.
+  function sigOf(doc, kind, i) {
+    if (kind === 'experience_bullets') {
+      const e = doc.experience[i];
+      return e ? `${(e.position || '').trim().toLowerCase()}|${(e.company || '').trim().toLowerCase()}` : null;
+    }
+    if (kind === 'project_bullets') { const p = doc.projects[i]; return p ? (p.name || '').trim().toLowerCase() : null; }
+    return null;
+  }
+  function locate(doc, kind, index, target) {
+    const list = kind === 'experience_bullets' ? doc.experience : doc.projects;
+    if (target === null || target === undefined) return index < list.length ? index : -1;
+    const hits = list.map((_, i) => i).filter(i => sigOf(doc, kind, i) === target);
+    return hits.length === 1 ? hits[0] : -1;
+  }
+  const GONE = 'The entry this suggestion was written for has changed or been removed.';
+
+  /** Apply a coach edit to `doc` in place; throws if its entry is gone. */
+  function applyEdit(doc, edit) {
+    switch (edit.kind) {
+      case 'summary': doc.summary = edit.text; break;
+      case 'headline': doc.basics.headline = edit.text; break;
+      case 'experience_bullets':
+      case 'project_bullets': {
+        const i = locate(doc, edit.kind, edit.index, edit.target);
+        if (i < 0) throw new Error(GONE);
+        (edit.kind === 'experience_bullets' ? doc.experience : doc.projects)[i].bullets = edit.items.slice();
+        break;
+      }
+      case 'skill_group': {
+        const g = doc.skills.find(s => (s.label || '').toLowerCase() === edit.label.toLowerCase());
+        if (g) g.details = edit.text; else doc.skills.push({ label: edit.label, details: edit.text });
+        break;
+      }
+      default: throw new Error('Unknown suggestion type.');
+    }
+  }
+
   // ------------------------------------------------------------ AI coach
   const EDIT_LABEL = {
     summary: () => 'New summary', headline: () => 'New headline',
@@ -708,13 +760,12 @@
     const status = h('span', { class: 'tiny muted' });
     const accept = h('button', { class: 'btn btn-primary btn-sm', type: 'button' }, icon('check'), ' Accept');
     const reject = h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, 'Reject');
-    accept.addEventListener('click', async () => {
-      try {
-        await flushSave();
-        const res = await api('POST', `/api/resumes/${RID}/apply-edit`, { edit });
-        data = res.data; renderStep(); refreshPreview();
-        card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Accepted';
-      } catch (e) { toast(e.message, 'error'); }
+    accept.addEventListener('click', () => {
+      // Applied to the editor's copy and saved by autosave, so it can't race
+      // with (or be overwritten by) a save that's already in flight.
+      try { applyEdit(data, edit); } catch (e) { toast(e.message, 'error'); return; }
+      changed(); renderStep();
+      card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Accepted';
     });
     reject.addEventListener('click', () => { card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Rejected'; });
     card.append(h('div', { class: 'accept-row' }, accept, reject, status));
@@ -737,7 +788,8 @@
       h('div', { class: 'drawer-head' }, h('h3', { text: 'Resume coach' }), creditsEl,
         h('button', { class: 'icon-btn', title: 'Clear conversation', 'aria-label': 'Clear conversation', onclick: async () => {
           if (!confirm('Clear this conversation?')) return;
-          await api('DELETE', `/api/resumes/${RID}/chat`); log.replaceChildren(); log.append(chips);
+          try { await api('DELETE', `/api/resumes/${RID}/chat`); log.replaceChildren(); log.append(chips); }
+          catch (e) { toast(e.message, 'error'); }
         } }, icon('trash')),
         h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, icon('x'))),
       h('div', { class: 'chat' }, log, h('div', { class: 'chat-input' }, input, send)));
@@ -824,13 +876,20 @@
           h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async () => {
             if (!confirm(`Restore “${v.label}”? Your current content will be replaced. Save a version first if you want to keep it.`)) return;
             await flushSave();
-            const res = await api('POST', `/api/resumes/${RID}/versions/${v.id}/restore`);
-            data = res.data; $('#quick-template').value = data.design.template;
-            renderStep(); refreshPreview(); close(); toast('Version restored.', 'success');
+            locked = true; // no autosave may land between the restore and reloading `data`
+            try {
+              const res = await api('POST', `/api/resumes/${RID}/versions/${v.id}/restore`);
+              clearTimeout(saveTimer);
+              data = res.data; dirty = false; $('#quick-template').value = data.design.template;
+              saveState.textContent = 'All changes saved'; saveState.className = 'save-state';
+              renderStep(); refreshPreview(); close(); toast('Version restored.', 'success');
+            } catch (e) { toast(e.message, 'error'); }
+            finally { locked = false; }
           } }, 'Restore'),
           h('button', { class: 'icon-btn', type: 'button', title: 'Delete version', 'aria-label': 'Delete version', onclick: async () => {
             if (!confirm('Delete this version?')) return;
-            await api('DELETE', `/api/resumes/${RID}/versions/${v.id}`); load();
+            try { await api('DELETE', `/api/resumes/${RID}/versions/${v.id}`); load(); }
+            catch (e) { toast(e.message, 'error'); }
           } }, icon('trash')))));
       } catch (e) { body.replaceChildren(h('div', { class: 'alert alert-error', text: e.message })); }
     }

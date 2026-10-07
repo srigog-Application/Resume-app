@@ -65,23 +65,35 @@
       const n = (bodyEl.value.match(/\[[^\]]{1,40}\]/g) || []).length;
       document.getElementById('placeholder-warn').textContent = n ? `${n} placeholder${n > 1 ? 's' : ''} still to fill in.` : '';
     };
-    async function save() {
-      if (!dirty) return;
-      dirty = false; state.textContent = 'Saving…'; state.className = 'save-state';
-      saving = api('PUT', `/api/letters/${boot.id}`, { title: titleEl.value || 'Cover letter', body: bodyEl.value });
-      try { await saving; if (!dirty) state.textContent = 'All changes saved'; }
-      catch (e) { dirty = true; state.textContent = 'Save failed'; state.className = 'save-state error'; }
-      finally { saving = null; }
+    // Saves are chained, so an older body can never land after a newer one.
+    let chain = Promise.resolve();
+    function save() {
+      chain = chain.then(async () => {
+        if (!dirty) return;
+        dirty = false; state.textContent = 'Saving…'; state.className = 'save-state';
+        try {
+          await api('PUT', `/api/letters/${boot.id}`, { title: titleEl.value || 'Cover letter', body: bodyEl.value });
+          if (!dirty) state.textContent = 'All changes saved';
+        } catch (e) {
+          dirty = true; state.textContent = 'Save failed. Retrying…'; state.className = 'save-state error';
+          // Retry server/network failures; a 4xx won't fix itself.
+          if (!e.status || e.status >= 500) { clearTimeout(timer); timer = setTimeout(save, 4000); }
+          else state.textContent = `Save failed: ${e.message}`;
+        }
+      });
+      return chain;
     }
     const changed = () => { dirty = true; warn(); state.textContent = 'Unsaved changes'; state.className = 'save-state dirty'; clearTimeout(timer); timer = setTimeout(save, 700); };
     bodyEl.addEventListener('input', changed);
     titleEl.addEventListener('input', changed);
     window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
     document.getElementById('download').addEventListener('click', async (e) => {
-      e.preventDefault(); clearTimeout(timer);
-      if (saving) await saving.catch(() => {});
+      e.preventDefault();
+      const href = e.currentTarget.href; // currentTarget is null after the first await
+      clearTimeout(timer);
       await save();
-      window.location = e.currentTarget.href;
+      if (dirty) { toast('Your latest edits could not be saved, so the PDF was not downloaded.', 'error'); return; }
+      window.location = href;
     });
     document.getElementById('copy').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(bodyEl.value); toast('Copied to clipboard.', 'success'); }

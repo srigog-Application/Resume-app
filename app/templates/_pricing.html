@@ -20,7 +20,8 @@
     <tr><th scope="row">Job tailorings per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'tailor') }}</td>{% endfor %}</tr>
     <tr><th scope="row">Cover letters per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'cover_letter') }}</td>{% endfor %}</tr>
     <tr><th scope="row">AI coach and rewrite credits per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'chat') }}</td>{% endfor %}</tr>
-    <tr><th scope="row">Resumes and uploads</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'Unlimited' if p.max_resumes is none else p.max_resumes }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Resume imports (upload a PDF or Word file) per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'import') }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Resumes</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'Unlimited' if p.max_resumes is none else p.max_resumes }}</td>{% endfor %}</tr>
     <tr><th scope="row">Templates</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'All ' ~ TEMPLATES|length if p.templates == 'all' else '3' }}</td>{% endfor %}</tr>
     <tr><th scope="row">Saved versions per resume</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'Unlimited' if p.max_versions_per_resume is none else p.max_versions_per_resume }}</td>{% endfor %}</tr>
     <tr><th scope="row">ATS checks, keyword match, job tracker and PDF download</th>{% for p in plans %}<td class="yes {{ 'col-pro' if p.key == 'pro' }}">Included</td>{% endfor %}</tr>

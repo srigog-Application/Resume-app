@@ -258,10 +258,12 @@ async def generate_letter(body: LetterGenIn, user: User = Depends(require_user_a
     try:
         text = await run_in_threadpool(ai_features.cover_letter, data, company, title, jd,
                                        body.tone, body.notes)
-    except AIError as e:
+    except BaseException as e:
         plans.refund(db, user, "cover_letter")
         db.commit()
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        if isinstance(e, AIError):
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        raise
     label = " · ".join(x for x in (company, title) if x) or "Cover letter"
     letter = CoverLetter(user_id=user.id, job_id=body.job_id, resume_id=resume.id,
                          title=label[:200], body=text)

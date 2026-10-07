@@ -7,7 +7,7 @@ means unlimited.
 import datetime as dt
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ FEATURES = {
     "tailor": "Job tailorings",
     "cover_letter": "Cover letters",
     "chat": "AI chat & rewrite credits",
+    "import": "Resume imports",
 }
 
 
@@ -33,13 +34,15 @@ class Plan:
 
 
 FREE = Plan("free", "Free", "$0", max_resumes=3, max_versions_per_resume=3, templates="free",
-            quotas={"analysis": 3, "tailor": 3, "cover_letter": 3, "chat": 20})
+            quotas={"analysis": 3, "tailor": 3, "cover_letter": 3, "chat": 20, "import": 5})
 PRO = Plan("pro", "Pro", "$11.99", max_resumes=None, max_versions_per_resume=None,
            templates="all",
-           quotas={"analysis": 100, "tailor": 100, "cover_letter": 100, "chat": 500})
+           quotas={"analysis": 100, "tailor": 100, "cover_letter": 100, "chat": 500,
+                   "import": 100})
 ELITE = Plan("elite", "Elite", "$23.99", max_resumes=None, max_versions_per_resume=None,
              templates="all",
-             quotas={"analysis": None, "tailor": None, "cover_letter": 100, "chat": 500})
+             quotas={"analysis": None, "tailor": None, "cover_letter": 100, "chat": 500,
+                     "import": 300})
 PLANS = {p.key: p for p in (FREE, PRO, ELITE)}
 PAID_PLANS = (PRO, ELITE)
 
@@ -92,18 +95,28 @@ def usage_summary(db: Session, user: User) -> list[dict]:
 
 
 def consume(db: Session, user: User, feature: str) -> bool:
-    """Reserve one use of `feature`. Returns False when the quota is exhausted."""
+    """Reserve one use of `feature`. Returns False when the quota is exhausted.
+
+    The check and the increment are a single conditional UPDATE, so parallel
+    requests can't all read the same count and slip past the limit.
+    """
     row = _usage_row(db, user, feature)
+    db.flush()
     limit = plan_for(user).quotas[feature]
-    if limit is not None and row.count >= limit:
-        return False
-    row.count += 1
-    return True
+    stmt = update(Usage).where(Usage.id == row.id).values(count=Usage.count + 1)
+    if limit is not None:
+        stmt = stmt.where(Usage.count < limit)
+    ok = db.execute(stmt.execution_options(synchronize_session=False)).rowcount == 1
+    db.expire(row)
+    return ok
 
 
 def refund(db: Session, user: User, feature: str) -> None:
     row = _usage_row(db, user, feature)
-    row.count = max(0, row.count - 1)
+    db.flush()
+    db.execute(update(Usage).where(Usage.id == row.id, Usage.count > 0)
+               .values(count=Usage.count - 1).execution_options(synchronize_session=False))
+    db.expire(row)
 
 
 def upgrade_hint(user: User, feature: str) -> str:

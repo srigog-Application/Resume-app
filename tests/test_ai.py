@@ -32,8 +32,33 @@ def test_credits_exhausted_returns_402(user_client):
 
 def test_failed_ai_call_refunds_credit(user_client):
     r = user_client.post("/api/ai/bullets", json={"bullets": ["   "]})
-    assert r.status_code == 502
+    assert r.status_code == 422  # input problem, not a server error
     assert used(user_client.email, "chat") == 0
+
+
+def test_ai_service_error_refunds_and_502(user_client, monkeypatch):
+    def boom(*a):
+        raise ai.AIError("The AI service is busy.")
+
+    monkeypatch.setattr(ai, "rewrite_bullets", boom)
+    r = user_client.post("/api/ai/bullets", json={"bullets": ["did x"]})
+    assert r.status_code == 502 and used(user_client.email, "chat") == 0
+
+
+def test_unexpected_error_still_refunds(user_client, monkeypatch):
+    def boom(*a):
+        raise ValueError("unexpected")
+
+    monkeypatch.setattr(ai, "rewrite_bullets", boom)
+    import pytest as _pytest
+    with _pytest.raises(ValueError):
+        user_client.post("/api/ai/bullets", json={"bullets": ["did x"]})
+    assert used(user_client.email, "chat") == 0
+
+
+def test_bullet_length_capped(user_client):
+    r = user_client.post("/api/ai/bullets", json={"bullets": ["x" * 1001]})
+    assert r.status_code == 422 and used(user_client.email, "chat") == 0
 
 
 def test_tailor_demo_and_keywords(user_client):
@@ -51,7 +76,7 @@ def test_tailor_demo_and_keywords(user_client):
 
 def test_tailor_requires_real_job_description(user_client):
     r = user_client.post("/api/ai/tailor", json={"data": {}, "job_description": "short"})
-    assert r.status_code == 502
+    assert r.status_code == 422
 
 
 class FakeMessages:

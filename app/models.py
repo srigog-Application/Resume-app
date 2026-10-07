@@ -51,6 +51,9 @@ class Resume(Base):
         cascade="all, delete-orphan",
         order_by="ResumeVersion.created_at.desc()",
     )
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(
+        cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class ResumeVersion(Base):

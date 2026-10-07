@@ -130,3 +130,34 @@ def test_checkout_completed_webhook(user_client, override_settings, monkeypatch)
     assert _post_event(user_client, event).status_code == 200
     user = get_user(user_client.email)
     assert user.plan == "pro" and user.stripe_subscription_id == "sub_7"
+
+
+def test_out_of_order_event_uses_live_subscription(user_client, override_settings, monkeypatch):
+    """A late 'incomplete' snapshot must not downgrade a subscription that is active now."""
+    import stripe
+
+    override_settings(stripe_secret_key="sk_test_123", stripe_price_pro="price_123")
+    uid = get_user(user_client.email).id
+    live = {"id": "sub_live", "object": "subscription", "status": "active", "customer": "cus_l",
+            "items": {"data": [{"price": {"id": "price_123"}}]}}
+    monkeypatch.setattr(stripe.Subscription, "retrieve",
+                        staticmethod(lambda sid: _stripe_obj(live)))
+    late = _sub_event("evt_late", "customer.subscription.created", uid, "incomplete",
+                      sub_id="sub_live")
+    assert _post_event(user_client, late).status_code == 200
+    assert get_user(user_client.email).plan == "pro"
+
+
+def test_unknown_price_grants_nothing(user_client, override_settings, monkeypatch):
+    import stripe
+
+    override_settings(stripe_secret_key="sk_test_123", stripe_price_pro="price_123")
+    uid = get_user(user_client.email).id
+    other = {"id": "sub_x", "object": "subscription", "status": "active", "customer": "cus_x",
+             "metadata": {"user_id": str(uid), "plan": "elite"},
+             "items": {"data": [{"price": {"id": "price_some_other_product"}}]}}
+    monkeypatch.setattr(stripe.Subscription, "retrieve",
+                        staticmethod(lambda sid: _stripe_obj(other)))
+    ev = _sub_event("evt_other", "customer.subscription.created", uid, "active", sub_id="sub_x")
+    assert _post_event(user_client, ev).status_code == 200
+    assert get_user(user_client.email).plan == "free"

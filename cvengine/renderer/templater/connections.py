@@ -6,7 +6,7 @@ import phonenumbers
 from cvengine.exception import CVEngineInternalError
 from cvengine.schema.models.cvengine_model import CVEngineModel
 
-from .markdown_parser import markdown_to_typst
+from .markdown_parser import escape_typst_string_literal, markdown_to_typst
 from .string_processor import clean_url
 
 fontawesome_icons = {
@@ -204,7 +204,7 @@ def compute_connections_for_typst(cvengine_model: CVEngineModel) -> list[str]:
 
     placeholders = [
         (
-            f'#connection-with-icon("{connection.fontawesome_icon}")'
+            f'#connection-with-icon("{escape_typst_string_literal(connection.fontawesome_icon)}")'
             f"[{markdown_to_typst(connection.body)}]"
             if show_icon
             else markdown_to_typst(connection.body)
@@ -214,7 +214,9 @@ def compute_connections_for_typst(cvengine_model: CVEngineModel) -> list[str]:
 
     return [
         (
-            f'#link("{connection.url}", icon: false, if-underline: false, if-color:'
+            # Web-app hardening: the URL is user input; escape it as a string literal.
+            f'#link("{escape_typst_string_literal(str(connection.url))}", icon: false,'
+            " if-underline: false, if-color:"
             f" false)[{placeholder}]"
             if connection.url and hyperlink
             else placeholder

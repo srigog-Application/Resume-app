@@ -221,9 +221,14 @@ def _date_fields(start: str, end: str, current: bool = False) -> dict[str, str]:
     return out
 
 
+# Characters that are never needed in a profile/portfolio URL and could break out
+# of a quoted string downstream (defence in depth; the engine escapes too).
+_URL_FORBIDDEN = re.compile(r'[\s"\\<>\[\]{}`]')
+
+
 def _url(value: str) -> str | None:
     value = value.strip()
-    if not value:
+    if not value or _URL_FORBIDDEN.search(value):
         return None
     if not re.match(r"^https?://", value, re.I):
         value = "https://" + value
@@ -277,8 +282,9 @@ def to_engine_input(data: ResumeData) -> tuple[dict[str, Any], list[str]]:
         else:
             warnings.append("Phone number couldn't be parsed; include the country code, "
                             "e.g. +44 20 7946 0958.")
-    if url := _url(b.website):
-        if _valid(website_validator, url):
+    if b.website.strip():
+        url = _url(b.website)
+        if url and _valid(website_validator, url):
             cv["website"] = url
         else:
             warnings.append("Website URL looks invalid, so it was left off.")

@@ -10,6 +10,7 @@ from typing import Any
 
 import stripe
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -35,11 +36,20 @@ def _stripe() -> Any:
 
 
 def _subscription_plan(subscription: dict[str, Any]) -> str:
-    """Which paid plan a subscription is for: by price ID, then by our metadata."""
+    """Which paid plan a subscription is for, decided by its price.
+
+    A price we don't sell (e.g. another product on the same Stripe account)
+    grants nothing. Our own metadata is only a fallback when Stripe sent no
+    line items at all.
+    """
     items = (subscription.get("items") or {}).get("data") or []
     for item in items:
         if plan := settings.plan_for_price((item.get("price") or {}).get("id")):
             return plan
+    if items:
+        log.warning("Subscription %s has no recognised price; not granting a plan.",
+                    subscription.get("id"))
+        return "free"
     meta_plan = (subscription.get("metadata") or {}).get("plan")
     return meta_plan if meta_plan in ("pro", "elite") else "pro"
 
@@ -110,6 +120,18 @@ def portal(user: User = Depends(require_user_page)):
     return RedirectResponse(session.url, status_code=303)
 
 
+def _current_subscription(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Fetch the live subscription; fall back to the event snapshot if billing
+    API keys aren't configured (webhook-only setups, tests)."""
+    if not settings.billing_enabled or not snapshot.get("id"):
+        return snapshot
+    try:
+        return _stripe().Subscription.retrieve(snapshot["id"]).to_dict()
+    except stripe.InvalidRequestError:
+        return snapshot  # e.g. a deleted subscription that can no longer be fetched
+    # Other Stripe errors propagate as a 500, so Stripe retries the webhook later.
+
+
 def _find_user(db: Session, obj: dict[str, Any]) -> User | None:
     metadata = obj.get("metadata") or {}
     uid = obj.get("client_reference_id") or metadata.get("user_id")
@@ -132,8 +154,11 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         )
     except (ValueError, stripe.SignatureVerificationError):
         return JSONResponse({"detail": "Invalid signature."}, status_code=400)
+    # Handling makes blocking DB and Stripe API calls; keep them off the event loop.
+    return await run_in_threadpool(_handle_event, event.to_dict(), db)
 
-    event = event.to_dict()  # StripeObjects aren't dicts in stripe-python >= 13.
+
+def _handle_event(event: dict[str, Any], db: Session) -> dict[str, Any]:
     try:
         db.add(ProcessedStripeEvent(id=event["id"], type=event["type"]))
         db.flush()
@@ -154,8 +179,13 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         # Ignore events about an older subscription once the user has a newer one.
         stale = user and user.stripe_subscription_id not in (None, obj.get("id"))
         if user and not (stale and user.is_pro):
-            apply_subscription(user, obj)
-            if etype == "customer.subscription.deleted":
+            # Stripe doesn't guarantee delivery order, so an event's snapshot may
+            # be outdated (e.g. a late "incomplete" after payment succeeded).
+            # Apply the subscription's *current* state instead.
+            current = _current_subscription(obj)
+            apply_subscription(user, current)
+            if etype == "customer.subscription.deleted" and current.get("status") not in \
+                    ACTIVE_STATUSES:
                 user.plan = "free"
     db.commit()
     log.info("Processed Stripe event %s (%s)", event["id"], etype)

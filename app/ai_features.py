@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from . import ai
-from .ai import AIError, _call, _job_block
+from .ai import AIInputError, _call, _job_block
 from .config import settings
 from .keywords import keyword_report
 from .resume_data import (
@@ -94,7 +94,7 @@ class ImportedResume(BaseModel):
 def import_resume(text: str) -> ResumeData:
     text = text.strip()
     if len(text) < 80:
-        raise AIError("We couldn't read enough text from that file. Is it a scanned image? "
+        raise AIInputError("We couldn't read enough text from that file. Is it a scanned image? "
                       "Try a text-based PDF or DOCX.")
     if not settings.ai_enabled:
         return _demo_import(text)
@@ -315,6 +315,37 @@ def _demo_chat(data: ResumeData, message: str) -> ChatReply:
               "make your most recent role stand out: what was the biggest result you "
               "drove there, and can you put a number on it (%, $, time saved, users)?",
         edits=edits)
+
+
+def _entry_sig(data: ResumeData, kind: str, index: int) -> str | None:
+    """Identify an experience/project entry by content, not by list position."""
+    if kind == "experience_bullets" and 0 <= index < len(data.experience):
+        e = data.experience[index]
+        return f"{e.position.strip().lower()}|{e.company.strip().lower()}"
+    if kind == "project_bullets" and 0 <= index < len(data.projects):
+        return data.projects[index].name.strip().lower()
+    return None
+
+
+def edit_target(data: ResumeData, e: ResumeEdit) -> str | None:
+    """Fingerprint of the entry an edit was written for (stored with the edit)."""
+    return _entry_sig(data, e.kind, e.index)
+
+
+def relocate_edit(data: ResumeData, e: ResumeEdit, target: str | None) -> ResumeEdit | None:
+    """Point an edit at the entry it was written for, even if entries were reordered.
+
+    Returns None when that entry no longer exists (or is ambiguous), so the
+    caller refuses instead of overwriting a different job's bullets.
+    """
+    if e.kind not in ("experience_bullets", "project_bullets") or target is None:
+        return e if valid_edit(data, e) else None
+    count = len(data.experience if e.kind == "experience_bullets" else data.projects)
+    matches = [i for i in range(count) if _entry_sig(data, e.kind, i) == target]
+    if len(matches) != 1:
+        return None
+    moved = e.model_copy(update={"index": matches[0]})
+    return moved if valid_edit(data, moved) else None
 
 
 def apply_edit(data: ResumeData, e: ResumeEdit) -> ResumeData:

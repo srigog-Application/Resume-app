@@ -21,7 +21,11 @@ log = logging.getLogger(__name__)
 
 
 class AIError(Exception):
-    pass
+    """The AI call failed (service error, refusal, bad output). Maps to 502."""
+
+
+class AIInputError(AIError):
+    """The request can't be served as given (user must fix the input). Maps to 422."""
 
 
 # ---------------------------------------------------------------- output schemas
@@ -136,7 +140,7 @@ def rewrite_bullets(
 ) -> list[str]:
     bullets = [b.strip() for b in bullets if b.strip()]
     if not bullets:
-        raise AIError("Add at least one bullet to rewrite.")
+        raise AIInputError("Add at least one bullet to rewrite.")
     if not settings.ai_enabled:
         return [_demo_bullet(b) for b in bullets]
 
@@ -165,7 +169,7 @@ def write_summary(data: ResumeData, job_description: str = "") -> str:
 
 def tailor(data: ResumeData, job_description: str) -> TailorResult:
     if len(job_description.strip()) < 80:
-        raise AIError("Paste the full job description (at least a few sentences).")
+        raise AIInputError("Paste the full job description (at least a few sentences).")
     if not settings.ai_enabled:
         return _demo_tailor(data, job_description)
     prompt = (

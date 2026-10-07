@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import BASE_DIR, settings
@@ -13,7 +13,17 @@ class Base(DeclarativeBase):
 def _make_engine(url: str):
     if url.startswith("sqlite"):
         (BASE_DIR / "data").mkdir(exist_ok=True)
-        return create_engine(url, connect_args={"check_same_thread": False})
+        eng = create_engine(url, connect_args={"check_same_thread": False})
+
+        # SQLite ignores foreign keys (ON DELETE CASCADE / SET NULL) unless asked.
+        # Without this, rows of a deleted resume survive and attach to a reused id.
+        @event.listens_for(eng, "connect")
+        def _fk_on(dbapi_conn, _record):
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA foreign_keys=ON")
+            cur.close()
+
+        return eng
     return create_engine(url, pool_pre_ping=True)
 
 

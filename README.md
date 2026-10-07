@@ -125,7 +125,8 @@ All limits live in `app/plans.py` (prices shown on the site, quotas, resume and 
 | Job tailorings (AI) | 3 | 100 | Unlimited |
 | Cover letters (AI) | 3 | 100 | 100 |
 | AI coach & rewrite credits | 20 | 500 | 500 |
-| Resumes / uploads | 3 | Unlimited | Unlimited |
+| Resume imports (AI) | 5 | 100 | 300 |
+| Resumes | 3 | Unlimited | Unlimited |
 | Templates | 3 | All 9 | All 9 |
 | Versions per resume | 3 | Unlimited | Unlimited |
 | ATS checks, keyword match, job tracker, PDF export | ✓ | ✓ | ✓ |
@@ -187,7 +188,8 @@ Put it behind HTTPS. The container honours `X-Forwarded-*` headers and listens o
 Before scaling, consider these. None of them are needed to start charging.
 
 - **No password reset or email verification** yet. Add a transactional email provider (Postmark, Resend, SES).
-- **No login rate limiting**. Add one at the proxy or with a small middleware, or put Cloudflare in front.
+- **No rate limiting yet** on login, signup, preview or AI routes. Add it at the proxy or with a small middleware (or Cloudflare) before opening signups widely; AI quotas are already enforced atomically per user.
+- **Document parsing runs in-process.** Uploads are capped at 5 MB, but a crafted DOCX/PDF can still inflate in memory; for public launch, parse in a subprocess with memory and time limits.
 - **Schema changes**: tables are created with `create_all`. Introduce Alembic before your first schema change in production.
 - **AI costs**: each AI action is one Claude call. Tune the quotas in `app/plans.py`, or set `ANTHROPIC_MODEL` to a cheaper model.
 - **Scanned (image-only) PDFs** can't be imported: there is no OCR. Users get a clear message asking for a text-based PDF or DOCX.
