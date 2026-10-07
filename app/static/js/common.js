@@ -20,6 +20,16 @@ window.UI = (() => {
     return el;
   }
 
+  /** Decorative line icon from /static/img/icons.svg. */
+  function icon(name) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'i'); svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', `/static/img/icons.svg#${name}`);
+    svg.append(use);
+    return svg;
+  }
+
   async function api(method, url, body) {
     const res = await fetch(url, {
       method, credentials: 'same-origin',
@@ -43,7 +53,7 @@ window.UI = (() => {
     let wrap = document.querySelector('.flash-wrap');
     if (!wrap) { wrap = h('div', { class: 'flash-wrap' }); document.body.append(wrap); }
     const el = h('div', { class: `alert alert-${kind}`, role: 'status' }, message);
-    if (kind === 'warning' && /upgrade|elite/i.test(message)) el.append(' ', h('a', { href: '/app/account', text: 'See plans →' }));
+    if (kind === 'warning' && /upgrade|elite/i.test(message)) el.append(' ', h('a', { href: '/app/account', text: 'Compare plans' }));
     wrap.append(el);
     setTimeout(() => el.remove(), 7000);
   }
@@ -55,7 +65,7 @@ window.UI = (() => {
     backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
     document.addEventListener('keydown', onKey);
     backdrop.append(h('div', { class: 'modal', role: 'dialog', 'aria-label': title },
-      h('div', { class: 'modal-head' }, h('h3', { text: title }), h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: close }, '✕')),
+      h('div', { class: 'modal-head' }, h('h3', { text: title }), h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: close }, icon('x'))),
       h('div', { class: 'modal-body' }, body),
       footer ? h('div', { class: 'modal-foot' }, footer(close)) : null));
     document.body.append(backdrop);
@@ -79,5 +89,5 @@ window.UI = (() => {
 
   function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : null; }
 
-  return { h, api, toast, modal, field, busy, safeUrl };
+  return { h, icon, api, toast, modal, field, busy, safeUrl };
 })();

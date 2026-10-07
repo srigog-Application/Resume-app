@@ -4,12 +4,23 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from .config import BASE_DIR, settings
 from .resume_data import TEMPLATES
 
 templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates")
-templates.env.globals.update(settings=settings, TEMPLATES=TEMPLATES)
+
+
+def icon(name: str, cls: str = "") -> Markup:
+    """Inline reference to a symbol in static/img/icons.svg (decorative)."""
+    return Markup(
+        f'<svg class="i {escape(cls)}" aria-hidden="true">'
+        f'<use href="/static/img/icons.svg#{escape(name)}"/></svg>'
+    )
+
+
+templates.env.globals.update(settings=settings, TEMPLATES=TEMPLATES, icon=icon)
 
 
 def flash(request: Request, message: str, kind: str = "info") -> None:

@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ settings.app_name }} · AI Resume Builder{% endblock %}</title>
-  <meta name="description" content="{% block description %}Build an ATS-friendly resume in minutes. AI rewrites your bullet points for impact and tailors your resume to any job description.{% endblock %}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%234f46e5'/><text x='16' y='22' font-family='Arial' font-weight='700' font-size='17' fill='white' text-anchor='middle'>R</text></svg>">
+  <meta name="description" content="{% block description %}Upload your resume, see what recruiters and ATS will flag, tailor it to each job, write the cover letter and track every application.{% endblock %}">
+  <meta name="theme-color" content="#f3f4f6">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2317202f'/><rect x='6' y='17' width='20' height='7' fill='%23ffe45c'/><text x='16' y='23' font-family='Georgia,serif' font-weight='700' font-size='19' fill='white' text-anchor='middle'>{{ settings.app_name[:1] }}</text></svg>">
+  <link rel="preload" href="/static/fonts/xcharter-bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/sourcesans3-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/app.css">
   {% block head %}{% endblock %}
 </head>
@@ -13,7 +16,7 @@
 {% block nav %}
 <header class="nav">
   <div class="container nav-inner">
-    <a class="logo" href="/"><span class="logo-mark">{{ settings.app_name[:1] }}</span>{{ settings.app_name }}</a>
+    <a class="logo" href="{{ '/app' if user else '/' }}"><span class="wm">{{ settings.app_name }}</span></a>
     {% if user %}
     {% set path = request.url.path %}
     <nav class="nav-links app-links">
@@ -31,11 +34,11 @@
     {% endif %}
     <div class="spacer"></div>
     {% if user %}
-      {% if not user.is_pro %}<a class="btn btn-secondary btn-sm hide-mobile" href="/app/account">⚡ Upgrade</a>{% endif %}
-      <a class="btn btn-ghost" href="/app/account" title="Account">Account</a>
+      {% if not user.is_pro %}<a class="btn btn-secondary btn-sm hide-mobile" href="/app/account">Upgrade</a>{% endif %}
+      <a class="btn btn-ghost" href="/app/account">{{ icon('user') }} <span class="hide-mobile">Account</span></a>
     {% else %}
       <a class="btn btn-ghost" href="/login">Log in</a>
-      <a class="btn btn-primary" href="/signup">Get started <span class="hide-mobile">free</span></a>
+      <a class="btn btn-primary" href="/signup">Start free</a>
     {% endif %}
   </div>
 </header>
@@ -54,10 +57,10 @@
 
 {% if user %}
 <nav class="mobile-tabs" aria-label="App">
-  <a href="/app">📄<span>Resumes</span></a>
-  <a href="/app/jobs">🗂<span>Jobs</span></a>
-  <a href="/app/letters">✉️<span>Letters</span></a>
-  <a href="/app/account">👤<span>Account</span></a>
+  <a href="/app">{{ icon('doc') }}<span>Resumes</span></a>
+  <a href="/app/jobs">{{ icon('board') }}<span>Jobs</span></a>
+  <a href="/app/letters">{{ icon('mail') }}<span>Letters</span></a>
+  <a href="/app/account">{{ icon('user') }}<span>Account</span></a>
 </nav>
 {% endif %}
 
@@ -66,9 +69,9 @@
   <div class="container row">
     <span>© {{ settings.app_name }}</span>
     <div class="spacer"></div>
-    <a class="muted" href="/#pricing">Pricing</a>
-    <a class="muted" href="/#faq">FAQ</a>
-    {% if user %}<a class="muted" href="/app">Dashboard</a>{% else %}<a class="muted" href="/login">Log in</a>{% endif %}
+    <a href="/#pricing">Pricing</a>
+    <a href="/#faq">Questions</a>
+    {% if user %}<a href="/app">Your resumes</a>{% else %}<a href="/login">Log in</a>{% endif %}
   </div>
 </footer>
 {% endblock %}

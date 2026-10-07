@@ -1,7 +1,7 @@
 /* Job tracker board: columns by status, drag & drop, add/edit modal. */
 (() => {
   'use strict';
-  const { h, api, toast, modal, field, safeUrl } = window.UI;
+  const { h, icon, api, toast, modal, field, safeUrl } = window.UI;
   const boot = JSON.parse(document.getElementById('boot').textContent);
   const STATUS_LIST = boot.statuses; // [[key, label], ...] in board order
   const STATUSES = Object.fromEntries(STATUS_LIST);
@@ -84,9 +84,9 @@
       field('Job description', desc),
       field('Notes', notes),
       !isNew ? h('div', { class: 'row' },
-        link ? h('a', { class: 'btn btn-ghost btn-sm', href: link, target: '_blank', rel: 'noopener noreferrer' }, '↗ Open posting') : null,
-        h('button', { class: 'btn btn-ai btn-sm', type: 'button', onclick: () => tailorFor(j) }, '🎯 Tailor a resume'),
-        h('a', { class: 'btn btn-secondary btn-sm', href: `/app/letters?job=${j.id}` }, '✉️ Write cover letter')) : null);
+        link ? h('a', { class: 'btn btn-ghost btn-sm', href: link, target: '_blank', rel: 'noopener noreferrer' }, icon('external'), ' Open posting') : null,
+        h('button', { class: 'btn btn-ai btn-sm', type: 'button', onclick: () => tailorFor(j) }, icon('target'), ' Tailor a resume to this job'),
+        h('a', { class: 'btn btn-secondary btn-sm', href: `/app/letters?job=${j.id}` }, icon('mail'), ' Write the cover letter')) : null);
 
     modal(isNew ? 'Add a job' : (j.title || 'Edit job'), body, (close) => [
       h('button', { class: 'btn btn-primary', type: 'button', onclick: async (e) => {

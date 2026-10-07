@@ -4,24 +4,24 @@
 <div class="container">
   <div class="page-head">
     <div>
-      <h1>Welcome back</h1>
-      <div class="muted small">{{ user.email }} · <span class="badge {{ 'badge-pro' if user.is_pro else 'badge-free' }}">{{ plan.name }}</span></div>
+      <h1>Your resumes</h1>
+      <div class="muted small">{{ user.email }}, on the <span class="badge {{ 'badge-pro' if user.is_pro else 'badge-free' }}">{{ plan.name }}</span> plan</div>
     </div>
   </div>
 
   <div class="quick-actions">
     <label class="card qa dropzone" id="dropzone" for="upload">
-      <span class="ico">⬆️</span>
-      <span><b>Upload your resume</b><span class="small muted">PDF, DOCX or TXT. We'll import it, then analyze it for ATS fit.</span>
+      <span class="ico">{{ icon('upload') }}</span>
+      <span><b>Upload a resume</b><span class="small muted">Drop a PDF, Word or text file here. It becomes editable sections, then you get an ATS check.</span>
         <span class="small" id="upload-status" aria-live="polite"></span></span>
       <input type="file" id="upload" accept=".pdf,.docx,.txt" hidden>
     </label>
     <form method="post" action="/app/resumes" style="display:contents">
-      <button class="card qa" type="submit"><span class="ico">✍️</span>
-        <span><b>Start from scratch</b><span class="small muted">Use the guided builder with live preview.</span></span></button>
+      <button class="card qa" type="submit"><span class="ico">{{ icon('pen') }}</span>
+        <span><b>Start from a blank page</b><span class="small muted">Fill in a guided form and watch the preview update.</span></span></button>
     </form>
-    <a class="card qa" href="/app/jobs?new=1"><span class="ico">🎯</span>
-      <span><b>Track a job</b><span class="small muted">Save a posting, then tailor your resume and write a cover letter for it.</span></span></a>
+    <a class="card qa" href="/app/jobs?new=1"><span class="ico">{{ icon('board') }}</span>
+      <span><b>Add a job you want</b><span class="small muted">Save the posting, then tailor a resume and write the cover letter for it.</span></span></a>
   </div>
 
   <div class="meters">
@@ -29,13 +29,13 @@
     <div class="card meter">
       <div class="row small"><b>{{ u.label }}</b>
         <span class="muted">{% if u.limit is none %}Unlimited{% else %}{{ u.left }} / {{ u.limit }} left{% endif %}</span></div>
-      <div class="usage-bar"><span style="width:{{ 100 if u.limit is none else ((100 * u.left / u.limit)|round|int) }}%"></span></div>
+      <div class="usage-bar" title="{{ u.used }} used"><span style="width:{{ 0 if u.limit is none else ((100 * u.used / u.limit)|round|int) }}%"></span></div>
     </div>
     {% endfor %}
   </div>
-  {% if not user.is_pro %}<p class="small" style="margin-top:8px"><a href="/app/account">Need more? See Pro and Elite →</a></p>{% endif %}
+  {% if not user.is_pro %}<p class="small" style="margin-top:8px"><a href="/app/account">Compare Pro and Elite</a></p>{% endif %}
 
-  <div class="section-title"><h2>My resumes</h2>
+  <div class="section-title"><h2>Resumes</h2>
     {% if plan.max_resumes %}<span class="small muted">{{ user.resumes|length }} of {{ plan.max_resumes }} on Free</span>{% endif %}</div>
   <div class="resume-grid">
     {% for r in user.resumes %}
@@ -44,34 +44,34 @@
         <a class="thumb" href="/app/resumes/{{ r.id }}"><img src="/static/img/templates/{{ tpl if tpl in TEMPLATES else 'classic' }}.png" alt="" loading="lazy"></a>
         <div class="body">
           <a href="/app/resumes/{{ r.id }}" style="color:inherit"><b>{{ r.title }}</b></a>
-          <div class="tiny muted">{{ TEMPLATES.get(tpl, TEMPLATES['classic']).name }} · Edited <time data-ts="{{ r.updated_at.isoformat() }}Z">{{ r.updated_at.strftime('%b %d, %Y') }}</time> · {{ r.versions|length }} version{{ '' if r.versions|length == 1 else 's' }}</div>
+          <div class="tiny muted">Edited <time data-ts="{{ r.updated_at.isoformat() }}Z">{{ r.updated_at.strftime('%b %d, %Y') }}</time>, {{ TEMPLATES.get(tpl, TEMPLATES['classic']).name }} template{% if r.versions %}, {{ r.versions|length }} saved version{{ '' if r.versions|length == 1 else 's' }}{% endif %}</div>
         </div>
         <div class="actions">
           <a class="btn btn-primary btn-sm" href="/app/resumes/{{ r.id }}">Edit</a>
-          <a class="btn btn-secondary btn-sm" href="/app/resumes/{{ r.id }}#analysis">Analyze</a>
-          <a class="btn btn-ghost btn-sm" href="/app/resumes/{{ r.id }}/pdf">PDF</a>
+          <a class="btn btn-secondary btn-sm" href="/app/resumes/{{ r.id }}#analysis">Check</a>
+          <a class="btn btn-ghost btn-sm" href="/app/resumes/{{ r.id }}/pdf" title="Download PDF">{{ icon('download') }} PDF</a>
           <div class="spacer"></div>
           <form method="post" action="/app/resumes/{{ r.id }}/delete" onsubmit="return confirm('Delete this resume and all its versions? This cannot be undone.')">
-            <button class="icon-btn" title="Delete resume" aria-label="Delete resume">🗑</button>
+            <button class="icon-btn" title="Delete resume" aria-label="Delete resume">{{ icon('trash') }}</button>
           </form>
         </div>
       </div>
     {% endfor %}
   </div>
 
-  <div class="section-title"><h2>Recent applications</h2><a class="small" href="/app/jobs">Open tracker →</a></div>
+  <div class="section-title"><h2>Recent applications</h2><a class="small" href="/app/jobs">Open the job tracker</a></div>
   {% if jobs %}
   <div class="letter-list">
     {% for j in jobs[:5] %}
     <a class="card letter-row" href="/app/jobs?open={{ j.id }}" style="color:inherit;text-decoration:none">
       <span class="status-dot dot-{{ j.status }}"></span>
-      <div class="info"><b>{{ j.title or 'Untitled role' }}</b> <span class="muted small">· {{ j.company }}</span></div>
-      <span class="badge">{{ j.status }}</span>
+      <div class="info"><b>{{ j.title or 'Untitled role' }}</b>{% if j.company %} <span class="muted small">at {{ j.company }}</span>{% endif %}</div>
+      <span class="small muted">{{ j.status|capitalize }}</span>
     </a>
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted small">No jobs tracked yet. <a href="/app/jobs?new=1">Add your first one</a> to tailor your resume against it.</p>
+  <p class="muted small">No applications yet. <a href="/app/jobs?new=1">Add the first job you want</a> and you can tailor a resume against it.</p>
   {% endif %}
 </div>
 {% endblock %}
@@ -87,14 +87,14 @@
         status = document.getElementById('upload-status');
   async function upload(file) {
     if (!file) return;
-    status.textContent = ' Importing “' + file.name + '”… this can take ~20 seconds.';
+    status.textContent = 'Importing ' + file.name + '. This takes up to 20 seconds.';
     const fd = new FormData(); fd.append('file', file);
     try {
       const res = await fetch('/api/resumes/import', { method: 'POST', body: fd, credentials: 'same-origin' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.detail || 'Upload failed.');
       window.location = body.url;
-    } catch (e) { status.textContent = ' ' + e.message; status.style.color = 'var(--danger)'; }
+    } catch (e) { status.textContent = e.message; status.style.color = 'var(--danger)'; }
   }
   input.addEventListener('change', () => upload(input.files[0]));
   ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('drag'); }));

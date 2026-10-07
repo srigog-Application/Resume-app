@@ -4,13 +4,13 @@
 <div class="container" style="max-width:1100px">
   <div class="page-head">
     <div style="flex:1;min-width:240px">
-      <a class="small" href="/app/letters">← Cover letters</a>
-      <input class="input title-input" id="title" value="{{ letter.title }}" maxlength="200" aria-label="Letter title" style="font-size:1.5rem !important;max-width:100%">
+      <a class="small" href="/app/letters">{{ icon('arrow-left') }} Cover letters</a>
+      <input class="input title-input" id="title" value="{{ letter.title }}" maxlength="200" aria-label="Letter title" style="font-size:var(--t-2xl) !important;max-width:100%;padding-left:0 !important">
     </div>
     <div class="row">
       <span class="save-state" id="save-state">Saved</span>
-      <button class="btn btn-secondary" id="copy">Copy text</button>
-      <a class="btn btn-primary" id="download" href="/app/letters/{{ letter.id }}/pdf">⬇ Download PDF</a>
+      <button class="btn btn-secondary" id="copy">{{ icon('copy') }} Copy text</button>
+      <a class="btn btn-primary" id="download" href="/app/letters/{{ letter.id }}/pdf">{{ icon('download') }} Download PDF</a>
     </div>
   </div>
   <div class="two-col">

@@ -1,36 +1,53 @@
-{# Pricing cards. Needs: free, pro, elite (Plan objects), optional user. #}
-{% macro quota(plan, key, unit) %}{% set q = plan.quotas[key] %}{{ 'Unlimited' if q is none else q }} {{ unit }}{% endmacro %}
-<div class="pricing pricing-3">
-  {% for p in [free, pro, elite] %}
-  <div class="card price-card {{ 'featured' if p.key == 'pro' }}">
-    <h3>{{ p.name }}</h3>
-    <div class="price">{{ p.price_label }} <small>{{ 'forever' if p.key == 'free' else '/ month' }}</small></div>
-    <ul class="checklist">
-      <li>{{ quota(p, 'analysis', 'resume analyses') }}{{ '' if p.quotas.analysis is none else ' / mo' }}</li>
-      <li>{{ quota(p, 'tailor', 'job tailorings') }}{{ '' if p.quotas.tailor is none else ' / mo' }}</li>
-      <li>{{ quota(p, 'cover_letter', 'cover letters') }} / mo</li>
-      <li>{{ quota(p, 'chat', 'AI coach & rewrite credits') }} / mo</li>
-      <li>{{ 'Unlimited resumes & uploads' if p.max_resumes is none else p.max_resumes ~ ' resumes' }}</li>
-      <li>{{ 'All ' ~ TEMPLATES|length ~ ' templates' if p.templates == 'all' else '3 ATS-friendly templates' }}</li>
-      <li>Job tracker &amp; PDF export</li>
-      <li>{{ 'Unlimited version history' if p.max_versions_per_resume is none else p.max_versions_per_resume ~ ' versions per resume' }}</li>
-    </ul>
-    {% if not user %}
-      <a class="btn {{ 'btn-primary' if p.key == 'pro' else 'btn-secondary' }} btn-block" href="/signup{{ '' if p.key == 'free' else '?next=/app/account' }}">{{ 'Start for free' if p.key == 'free' else 'Get ' ~ p.name }}</a>
-    {% elif user.plan == p.key %}
-      <button class="btn btn-secondary btn-block" disabled>Your current plan</button>
-    {% elif p.key == 'free' %}
-      <span></span>
-    {% elif user.is_pro %}
-      {% if settings.billing_enabled and user.stripe_customer_id %}
-      <form method="post" action="/billing/portal"><button class="btn btn-secondary btn-block">Switch to {{ p.name }}</button></form>
-      {% endif %}
-    {% elif settings.billing_enabled and settings.price_for(p.key) %}
-      <form method="post" action="/billing/checkout"><input type="hidden" name="plan" value="{{ p.key }}">
-        <button class="btn {{ 'btn-primary' if p.key == 'pro' else 'btn-secondary' }} btn-block">Upgrade to {{ p.name }}</button></form>
-    {% else %}
-      <div class="alert alert-info tiny" style="margin:0">Billing isn't configured on this server yet (see README).</div>
-    {% endif %}
-  </div>
-  {% endfor %}
+{# Plan comparison table. Needs: free, pro, elite (Plan objects), optional user. #}
+{% set plans = [free, pro, elite] %}
+{% macro per_month(p, key) %}{% set q = p.quotas[key] %}{{ 'Unlimited' if q is none else q }}{% endmacro %}
+<div class="table-scroll">
+<table class="price-table">
+  <thead>
+    <tr>
+      <th scope="col"><span class="sr-only">Feature</span></th>
+      {% for p in plans %}
+      <th scope="col" class="{{ 'col-pro' if p.key == 'pro' }}">
+        <span class="plan">{{ p.name }}</span>
+        <span class="amount">{{ p.price_label }}<span class="per">{{ '' if p.key == 'free' else ' / month' }}</span></span>
+        {% if p.key == 'pro' %}<span class="rec">Best for an active search</span>{% elif p.key == 'elite' %}<span class="muted tiny">For heavy appliers and coaches</span>{% else %}<span class="muted tiny">To try everything</span>{% endif %}
+      </th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    <tr><th scope="row">AI resume reviews per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'analysis') }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Job tailorings per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'tailor') }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Cover letters per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'cover_letter') }}</td>{% endfor %}</tr>
+    <tr><th scope="row">AI coach and rewrite credits per month</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ per_month(p, 'chat') }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Resumes and uploads</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'Unlimited' if p.max_resumes is none else p.max_resumes }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Templates</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'All ' ~ TEMPLATES|length if p.templates == 'all' else '3' }}</td>{% endfor %}</tr>
+    <tr><th scope="row">Saved versions per resume</th>{% for p in plans %}<td class="{{ 'col-pro' if p.key == 'pro' }}">{{ 'Unlimited' if p.max_versions_per_resume is none else p.max_versions_per_resume }}</td>{% endfor %}</tr>
+    <tr><th scope="row">ATS checks, keyword match, job tracker and PDF download</th>{% for p in plans %}<td class="yes {{ 'col-pro' if p.key == 'pro' }}">Included</td>{% endfor %}</tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td></td>
+      {% for p in plans %}
+      <td class="{{ 'col-pro' if p.key == 'pro' }}">
+        {% if not user %}
+          <a class="btn {{ 'btn-primary' if p.key == 'pro' else 'btn-secondary' }} btn-block" href="/signup{{ '' if p.key == 'free' else '?next=/app/account' }}">{{ 'Start free' if p.key == 'free' else 'Choose ' ~ p.name }}</a>
+        {% elif user.plan == p.key %}
+          <span class="muted small">Your current plan</span>
+        {% elif p.key == 'free' %}
+        {% elif user.is_pro %}
+          {% if settings.billing_enabled and user.stripe_customer_id %}
+          <form method="post" action="/billing/portal"><button class="btn btn-secondary btn-block">Switch to {{ p.name }}</button></form>
+          {% endif %}
+        {% elif settings.billing_enabled and settings.price_for(p.key) %}
+          <form method="post" action="/billing/checkout"><input type="hidden" name="plan" value="{{ p.key }}">
+            <button class="btn {{ 'btn-primary' if p.key == 'pro' else 'btn-secondary' }} btn-block">Upgrade to {{ p.name }}</button></form>
+        {% else %}
+          <span class="muted tiny">Billing isn't set up on this server yet. See the README.</span>
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+  </tfoot>
+</table>
 </div>

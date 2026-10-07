@@ -34,6 +34,16 @@
     return el;
   }
   const $ = (sel) => document.querySelector(sel);
+  /** Decorative line icon from /static/img/icons.svg. */
+  function icon(name) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'i'); svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', `/static/img/icons.svg#${name}`);
+    svg.append(use);
+    return svg;
+  }
+
 
   /** Text with [placeholders] highlighted, built safely. */
   function withPlaceholders(text) {
@@ -70,7 +80,7 @@
     if (!wrap) { wrap = h('div', { class: 'flash-wrap' }); document.body.append(wrap); }
     const el = h('div', { class: `alert alert-${kind}`, role: 'status' }, message);
     if (kind === 'warning' && /upgrade/i.test(message)) {
-      el.append(' ', h('a', { href: '/app/account', text: 'See plans →' }));
+      el.append(' ', h('a', { href: '/app/account', text: 'Compare plans' }));
     }
     wrap.append(el);
     setTimeout(() => el.remove(), 6000);
@@ -78,7 +88,7 @@
 
   function setLeft(feature, n) {
     if (n !== undefined) left[feature] = n;
-    if (feature === 'chat') $('#credits').textContent = left.chat === null ? '✨ Unlimited' : `✨ ${left.chat} credits`;
+    if (feature === 'chat') $('#credits').textContent = left.chat === null ? 'Unlimited AI credits' : `${left.chat} AI credits left`;
   }
   const setCredits = (n) => setLeft('chat', n);
 
@@ -138,7 +148,7 @@
       res.pages.forEach((src, i) => box.append(h('img', { src, alt: `Resume page ${i + 1}` })));
       $('#page-count').textContent = res.pages.length ? `${res.pages.length} page${res.pages.length > 1 ? 's' : ''}` : '';
       if (res.pages.length > 1) {
-        $('#page-count').textContent += ' · tip: most resumes should fit on one page';
+        $('#page-count').textContent += '. Most resumes should fit on one.';
       }
     } catch (e) {
       if (seq === previewSeq) box.replaceChildren(h('div', { class: 'alert alert-error preview-msg', text: e.message }));
@@ -163,7 +173,7 @@
   }
 
   function aiButton(label, onclick, feature = 'chat') {
-    const btn = h('button', { class: 'btn btn-ai btn-sm', type: 'button' }, `✨ ${label}`);
+    const btn = h('button', { class: 'btn btn-ai btn-sm', type: 'button' }, icon('spark'), ` ${label}`);
     btn.addEventListener('click', async () => {
       if (!hasLeft(feature)) { toast(OUT_MSG[feature], 'warning'); return; }
       const original = btn.textContent;
@@ -178,7 +188,7 @@
 
   function suggestionBox(title, bodyEl, actions) {
     const box = h('div', { class: 'suggest' },
-      h('div', { class: 'suggest-head' }, `✨ ${title}`),
+      h('div', { class: 'suggest-head' }, title),
       bodyEl,
       h('div', { class: 'row' }, ...actions(() => box.remove())));
     return box;
@@ -205,12 +215,12 @@
     card.append(
       h('div', { class: 'entry-head' },
         h('button', { class: 'icon-btn', type: 'button', title: 'Collapse', 'aria-label': 'Collapse',
-          onclick: () => card.classList.toggle('collapsed') }, '▾'),
+          onclick: () => card.classList.toggle('collapsed') }, icon('chevron')),
         titleEl,
-        h('button', { class: 'icon-btn', type: 'button', title: 'Move up', 'aria-label': 'Move up', onclick: () => moveItem(list, i, -1) }, '↑'),
-        h('button', { class: 'icon-btn', type: 'button', title: 'Move down', 'aria-label': 'Move down', onclick: () => moveItem(list, i, 1) }, '↓'),
+        h('button', { class: 'icon-btn', type: 'button', title: 'Move up', 'aria-label': 'Move up', onclick: () => moveItem(list, i, -1) }, icon('up')),
+        h('button', { class: 'icon-btn', type: 'button', title: 'Move down', 'aria-label': 'Move down', onclick: () => moveItem(list, i, 1) }, icon('down')),
         h('button', { class: 'icon-btn', type: 'button', title: `Remove ${noun}`, 'aria-label': `Remove ${noun}`,
-          onclick: () => { if (confirm(`Remove this ${noun}?`)) { list.splice(i, 1); changed(); renderStep(); } } }, '✕')),
+          onclick: () => { if (confirm(`Remove this ${noun}?`)) { list.splice(i, 1); changed(); renderStep(); } } }, icon('trash'))),
       h('div', { class: 'entry-body' }, bodyFn(item, updateTitle)));
     return card;
   }
@@ -248,19 +258,19 @@
                   h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: close }, 'Dismiss')]);
                 rowEl.after(box);
               } catch (err) { toast(err.message, err.status === 402 ? 'warning' : 'error'); }
-              finally { btn.disabled = false; btn.textContent = '✨'; }
+              finally { btn.disabled = false; btn.replaceChildren(icon('spark')); }
             },
-          }, '✨'));
+          }, icon('spark')));
         }
         tools.push(h('button', {
           class: 'icon-btn', type: 'button', title: 'Remove bullet', 'aria-label': 'Remove bullet',
           onclick: () => { list.splice(i, 1); changed(); draw(); },
-        }, '✕'));
+        }, icon('x')));
         const rowEl = h('div', { class: 'bullet' }, h('span', { class: 'dot' }, '•'), ta, ...tools);
         return rowEl;
       });
       const toolbar = h('div', { class: 'bullet-tools' },
-        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => { list.push(''); changed({ preview: false }); draw(); wrap.querySelectorAll('textarea')[list.length - 1]?.focus(); } }, '＋ Add bullet'));
+        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => { list.push(''); changed({ preview: false }); draw(); wrap.querySelectorAll('textarea')[list.length - 1]?.focus(); } }, icon('plus'), ' Add bullet'));
       if (ctx.ai) {
         toolbar.append(aiButton('Improve all bullets', async () => {
           const bullets = list.filter(b => b.trim());
@@ -293,16 +303,16 @@
   };
 
   const STEPS = [
-    { key: 'contact', label: 'Contact', icon: '👤', done: () => !!(data.basics.name && data.basics.email), render: stepContact },
-    { key: 'experience', label: 'Experience', icon: '💼', done: () => data.experience.some(e => e.company), render: stepExperience },
-    { key: 'education', label: 'Education', icon: '🎓', done: () => data.education.some(e => e.institution), render: stepEducation },
-    { key: 'skills', label: 'Skills', icon: '🛠', done: () => data.skills.some(s => s.details), render: stepSkills },
-    { key: 'projects', label: 'Projects', icon: '🚀', done: () => data.projects.some(p => p.name), render: stepProjects },
-    { key: 'extras', label: 'Certifications', icon: '🏅', done: () => data.certifications.some(c => c.name), render: stepExtras },
-    { key: 'summary', label: 'Summary', icon: '📝', done: () => !!data.summary, render: stepSummary },
-    { key: 'design', label: 'Design', icon: '🎨', done: () => true, render: stepDesign },
-    { key: 'analysis', label: 'Analysis', icon: '🔍', divider: true, done: () => !!lastAnalysis, render: stepAnalysis },
-    { key: 'tailor', label: 'Tailor to a job', icon: '🎯', done: () => false, render: stepTailor },
+    { key: 'contact', label: 'Contact', icon: 'user', done: () => !!(data.basics.name && data.basics.email), render: stepContact },
+    { key: 'experience', label: 'Experience', icon: 'briefcase', done: () => data.experience.some(e => e.company), render: stepExperience },
+    { key: 'education', label: 'Education', icon: 'cap', done: () => data.education.some(e => e.institution), render: stepEducation },
+    { key: 'skills', label: 'Skills', icon: 'tools', done: () => data.skills.some(s => s.details), render: stepSkills },
+    { key: 'projects', label: 'Projects', icon: 'folder', done: () => data.projects.some(p => p.name), render: stepProjects },
+    { key: 'extras', label: 'Certifications', icon: 'award', done: () => data.certifications.some(c => c.name), render: stepExtras },
+    { key: 'summary', label: 'Summary', icon: 'doc', done: () => !!data.summary, render: stepSummary },
+    { key: 'design', label: 'Design', icon: 'palette', done: () => true, render: stepDesign },
+    { key: 'analysis', label: 'ATS check', icon: 'search', divider: true, done: () => !!lastAnalysis, render: stepAnalysis },
+    { key: 'tailor', label: 'Tailor to a job', icon: 'target', done: () => false, render: stepTailor },
   ];
   let current = 0;
 
@@ -314,7 +324,7 @@
       nav.append(h('button', {
         type: 'button', class: `${i === current ? 'active' : ''} ${s.done() && i !== current ? 'done' : ''}`,
         onclick: () => go(i), title: s.label,
-      }, h('span', { class: 'num' }, s.done() && i !== current ? '✓' : s.icon), h('span', { class: 'lbl', text: s.label })));
+      }, h('span', { class: 'num' }, icon(s.done() && i !== current ? 'check' : s.icon)), h('span', { class: 'lbl', text: s.label })));
     });
   }
 
@@ -332,9 +342,9 @@
     const form = $('#form');
     form.replaceChildren(step.render());
     const foot = h('div', { class: 'step-foot' },
-      current > 0 ? h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => go(current - 1) }, `← ${STEPS[current - 1].label}`) : h('span'),
-      current < STEPS.length - 1 ? h('button', { class: 'btn btn-primary', type: 'button', onclick: () => go(current + 1) }, `Next: ${STEPS[current + 1].label} →`)
-        : h('a', { class: 'btn btn-primary', href: `/app/resumes/${RID}/pdf`, onclick: downloadClick }, '⬇ Download PDF'));
+      current > 0 ? h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => go(current - 1) }, `Back to ${STEPS[current - 1].label}`) : h('span'),
+      current < STEPS.length - 1 ? h('button', { class: 'btn btn-primary', type: 'button', onclick: () => go(current + 1) }, `Next: ${STEPS[current + 1].label}`)
+        : h('a', { class: 'btn btn-primary', href: `/app/resumes/${RID}/pdf`, onclick: downloadClick }, icon('download'), ' Download PDF'));
     form.append(foot);
   }
 
@@ -380,7 +390,7 @@
     const out = h('div', {}, head('Work experience', 'Most recent first. Aim for 3–5 bullets per role that show results, not duties.'));
     data.experience.forEach((_, i) => {
       out.append(entryCard(data.experience, i,
-        (e) => [e.position, e.company].filter(Boolean).join(' · '),
+        (e) => [e.position, e.company].filter(Boolean).join(' at '),
         (e, updateTitle) => {
           const cur = h('input', { type: 'checkbox', checked: e.current, onchange: (ev) => { e.current = ev.target.checked; endField.querySelector('input').disabled = e.current; changed(); } });
           const endField = field('End date', e, 'end_date', { type: 'month' });
@@ -399,7 +409,7 @@
     out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => {
       data.experience.push({ position: '', company: '', location: '', start_date: '', end_date: '', current: false, bullets: [''] });
       changed({ preview: false }); renderStep();
-    } }, '＋ Add position'));
+    } }, icon('plus'), ' Add position'));
     return out;
   }
 
@@ -407,7 +417,7 @@
     const out = h('div', {}, head('Education', 'Degrees, bootcamps or relevant coursework. Add honors or GPA if they help.'));
     data.education.forEach((_, i) => {
       out.append(entryCard(data.education, i,
-        (e) => [e.degree, e.area, e.institution].filter(Boolean).join(' · '),
+        (e) => [[e.degree, e.area].filter(Boolean).join(' in '), e.institution].filter(Boolean).join(', '),
         (e, updateTitle) => h('div', {},
           field('School', e, 'institution', { placeholder: 'University of Michigan', onchange: updateTitle }),
           h('div', { class: 'grid-2' },
@@ -421,7 +431,7 @@
     out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => {
       data.education.push({ institution: '', degree: '', area: '', location: '', start_date: '', end_date: '', details: [] });
       changed({ preview: false }); renderStep();
-    } }, '＋ Add education'));
+    } }, icon('plus'), ' Add education'));
     return out;
   }
 
@@ -440,7 +450,7 @@
     out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => {
       data.projects.push({ name: '', link: '', start_date: '', end_date: '', bullets: [''] });
       changed({ preview: false }); renderStep();
-    } }, '＋ Add project'));
+    } }, icon('plus'), ' Add project'));
     return out;
   }
 
@@ -452,9 +462,9 @@
           field('Category', s, 'label', { placeholder: 'Languages' }),
           field('Skills', s, 'details', { placeholder: 'Python, SQL, TypeScript' }),
           h('button', { class: 'icon-btn', type: 'button', style: 'margin-bottom:18px', title: 'Remove', 'aria-label': 'Remove skill group',
-            onclick: () => { data.skills.splice(i, 1); changed(); renderStep(); } }, '✕'))));
+            onclick: () => { data.skills.splice(i, 1); changed(); renderStep(); } }, icon('trash')))));
     });
-    out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => { data.skills.push({ label: '', details: '' }); changed({ preview: false }); renderStep(); } }, '＋ Add skill group'));
+    out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => { data.skills.push({ label: '', details: '' }); changed({ preview: false }); renderStep(); } }, icon('plus'), ' Add skill group'));
     return out;
   }
 
@@ -466,7 +476,7 @@
           field('Certification', c, 'name', { placeholder: 'AWS Certified Solutions Architect', onchange: updateTitle }),
           h('div', { class: 'grid-2' }, field('Issuer', c, 'issuer', { placeholder: 'Amazon' }), field('Year', c, 'date', { placeholder: '2024' }))), 'certification'));
     });
-    out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => { data.certifications.push({ name: '', issuer: '', date: '' }); changed({ preview: false }); renderStep(); } }, '＋ Add certification'));
+    out.append(h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => { data.certifications.push({ name: '', issuer: '', date: '' }); changed({ preview: false }); renderStep(); } }, icon('plus'), ' Add certification'));
     return out;
   }
 
@@ -481,7 +491,7 @@
         type: 'button', class: `tpl-option ${d.template === key ? 'selected' : ''}`,
         onclick: () => { d.template = key; $('#quick-template').value = key; changed(); renderStep(); },
       }, h('img', { src: `/static/img/templates/${key}.png`, alt: '', loading: 'lazy' }),
-      h('span', {}, t.name, t.free ? null : h('span', { class: 'badge badge-pro', text: boot.isPro ? 'Pro' : 'Pro 🔒' }))));
+      h('span', {}, t.name, t.free ? null : h('span', { class: 'badge badge-pro', text: 'Pro' }))));
     }
     out.append(grid);
     const sw = h('div', { class: 'swatches' });
@@ -505,7 +515,7 @@
     if (!boot.jobs.length) return null;
     const sel = h('select', { onchange: (e) => onPick(boot.jobs.find(j => j.id === Number(e.target.value))) },
       h('option', { value: '', text: 'Choose a job from your tracker…' }),
-      boot.jobs.map(j => h('option', { value: String(j.id), text: [j.title, j.company].filter(Boolean).join(' · ') || 'Untitled job' })));
+      boot.jobs.map(j => h('option', { value: String(j.id), text: [j.title, j.company].filter(Boolean).join(' at ') || 'Untitled job' })));
     const cur = boot.jobs.find(j => j.description && j.description === store.get(jobKey));
     if (cur) sel.value = String(cur.id);
     return h('div', { class: 'field' }, h('label', { text: 'Target job' }), sel);
@@ -523,7 +533,7 @@
       if (tooShort()) { toast('Paste the full job description (at least a few sentences).', 'info'); return; }
       try { showScore(results, await api('POST', '/api/keywords', { data, job_description: ta.value })); }
       catch (e) { toast(e.message, 'error'); }
-    } }, '📊 Check match score (free)');
+    } }, 'Check keyword match (free)');
     const tailorBtn = aiButton('Tailor my resume', async () => {
       if (tooShort()) { toast('Paste the full job description (at least a few sentences).', 'info'); return; }
       await flushSave();
@@ -571,7 +581,7 @@
     for (const e of res.experience) {
       const src = data.experience[e.index];
       if (!src) continue;
-      items.push({ label: [src.position, src.company].filter(Boolean).join(' · ') || `Position ${e.index + 1}`,
+      items.push({ label: [src.position, src.company].filter(Boolean).join(' at ') || `Position ${e.index + 1}`,
         old: src.bullets.filter(b => b.trim()), neu: e.bullets, apply: (d) => { d.experience[e.index].bullets = e.bullets.slice(); } });
     }
     if (res.skills_to_add.length) {
@@ -584,13 +594,13 @@
     }
 
     const card = h('div', { class: 'suggest tailor-card' },
-      h('div', { class: 'suggest-head' }, '✨ Tailoring suggestions'),
+      h('div', { class: 'suggest-head' }, 'Suggested edits for this job'),
       res.notes?.length ? h('ul', {}, res.notes.map(n => h('li', { text: n }))) : null,
       h('div', { class: 'row', style: 'margin-bottom:10px' },
         h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async (ev) => {
           try { await flushSave(); await api('POST', `/api/resumes/${RID}/versions`, { label: 'Before tailoring' }); toast('Saved version “Before tailoring”.', 'success'); ev.target.disabled = true; }
           catch (e) { toast(e.message, e.status === 402 ? 'warning' : 'error'); }
-        } }, '🕘 Save a version first'),
+        } }, icon('history'), ' Save a version first'),
         h('span', { class: 'tiny muted', text: 'Accepting changes edits this resume.' })));
 
     for (const it of items) {
@@ -600,13 +610,13 @@
         it.done = state;
         if (state === 'accepted') { it.apply(data); changed(); }
         row.classList.add(state);
-        row.querySelector('.accept-row').replaceChildren(h('span', { class: 'tiny muted', text: state === 'accepted' ? 'Applied ✓' : 'Rejected' }));
+        row.querySelector('.accept-row').replaceChildren(h('span', { class: 'tiny muted', text: state === 'accepted' ? 'Accepted' : 'Rejected' }));
       };
       const row = h('div', { class: 'sugg-item' },
         h('div', { class: 'row', style: 'margin-bottom:6px' }, h('b', { class: 'small', text: it.label }), h('div', { class: 'spacer' }),
           h('div', { class: 'accept-row' },
-            h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => mark('accepted') }, '✓ Accept'),
-            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => mark('rejected') }, '✕ Reject'))),
+            h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => mark('accepted') }, icon('check'), ' Accept'),
+            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => mark('rejected') }, 'Reject'))),
         it.old.length ? h('ul', {}, it.old.map(b => h('li', { class: 'diff-old', text: b }))) : null,
         h('ul', {}, it.neu.map(b => h('li', { class: 'diff-new' }, withPlaceholders(b)))));
       it.mark = mark;
@@ -659,7 +669,7 @@
       h('div', { class: 'row', style: 'flex-wrap:nowrap;margin-bottom:10px' }, scoreRing(r.score, 64),
         h('div', {}, h('b', { text: 'ATS readiness' }), h('div', { class: 'small muted', text: failed.length ? `${failed.length} thing${failed.length > 1 ? 's' : ''} to fix` : 'Every check passes. Nice!' }))),
       ...[...failed, ...r.checks.filter(c => c.passed)].map(c => h('div', { class: `check ${c.passed ? 'ok' : 'bad'}` },
-        h('span', { class: 'mark' }, c.passed ? '✓' : '!'), h('span', { text: c.detail }))));
+        h('span', { class: 'mark' }, icon(c.passed ? 'check' : 'alert')), h('span', { text: c.detail }))));
   }
 
   function renderAnalysis(box, res) {
@@ -671,7 +681,7 @@
         h('div', { style: 'padding:0 16px 16px' },
           h('b', { class: 'small', text: 'Top fixes' }),
           h('ol', { class: 'small', style: 'padding-left:20px;margin:6px 0 10px' }, res.top_fixes.map(f => h('li', { text: f }))),
-          h('button', { class: 'btn btn-ai btn-sm', type: 'button', onclick: () => openCoach(`Help me fix the top issues from my analysis: ${res.top_fixes.slice(0, 3).join(' | ')}`) }, '💬 Fix these with the AI coach'),
+          h('button', { class: 'btn btn-ai btn-sm', type: 'button', onclick: () => openCoach(`Help me fix the top issues from my analysis: ${res.top_fixes.slice(0, 3).join(' | ')}`) }, icon('chat'), ' Fix these with the coach'),
           res.missing_keywords.length ? h('div', { style: 'margin-top:12px' }, h('b', { class: 'small', text: 'Missing keywords' }),
             h('div', { class: 'chips', style: 'margin-top:6px' }, res.missing_keywords.map(k => h('span', { class: 'chip miss', text: k })))) : null)),
       ...res.sections.map(s => h('div', { class: 'card section-review' },
@@ -685,9 +695,9 @@
   // ------------------------------------------------------------ AI coach
   const EDIT_LABEL = {
     summary: () => 'New summary', headline: () => 'New headline',
-    experience_bullets: (e) => { const x = data.experience[e.index]; return `Bullets · ${[x?.position, x?.company].filter(Boolean).join(' at ') || 'position'}`; },
-    project_bullets: (e) => `Project bullets · ${data.projects[e.index]?.name || 'project'}`,
-    skill_group: (e) => `Skills · ${e.label}`,
+    experience_bullets: (e) => { const x = data.experience[e.index]; return `Bullets for ${[x?.position, x?.company].filter(Boolean).join(' at ') || 'this position'}`; },
+    project_bullets: (e) => `Bullets for ${data.projects[e.index]?.name || 'this project'}`,
+    skill_group: (e) => `Skills: ${e.label}`,
   };
 
   function editCard(edit) {
@@ -696,14 +706,14 @@
       h('div', { class: 'why', text: `${EDIT_LABEL[edit.kind](edit)}. ${edit.reason}` }),
       h('ul', {}, lines.map(l => h('li', {}, withPlaceholders(l)))));
     const status = h('span', { class: 'tiny muted' });
-    const accept = h('button', { class: 'btn btn-primary btn-sm', type: 'button' }, '✓ Accept');
-    const reject = h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, '✕ Reject');
+    const accept = h('button', { class: 'btn btn-primary btn-sm', type: 'button' }, icon('check'), ' Accept');
+    const reject = h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, 'Reject');
     accept.addEventListener('click', async () => {
       try {
         await flushSave();
         const res = await api('POST', `/api/resumes/${RID}/apply-edit`, { edit });
         data = res.data; renderStep(); refreshPreview();
-        card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Applied ✓';
+        card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Accepted';
       } catch (e) { toast(e.message, 'error'); }
     });
     reject.addEventListener('click', () => { card.classList.add('done'); accept.remove(); reject.remove(); status.textContent = 'Rejected'; });
@@ -724,12 +734,12 @@
     const chips = h('div', { class: 'chips-suggest' }, starters.map(t => h('button', { type: 'button', onclick: () => { input.value = t; doSend(); } }, t)));
 
     const drawer = h('aside', { class: 'drawer wide', role: 'dialog', 'aria-label': 'AI resume coach' },
-      h('div', { class: 'drawer-head' }, h('h3', { text: '💬 AI resume coach' }), creditsEl,
+      h('div', { class: 'drawer-head' }, h('h3', { text: 'Resume coach' }), creditsEl,
         h('button', { class: 'icon-btn', title: 'Clear conversation', 'aria-label': 'Clear conversation', onclick: async () => {
           if (!confirm('Clear this conversation?')) return;
           await api('DELETE', `/api/resumes/${RID}/chat`); log.replaceChildren(); log.append(chips);
-        } }, '🗑'),
-        h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, '✕')),
+        } }, icon('trash')),
+        h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, icon('x'))),
       h('div', { class: 'chat' }, log, h('div', { class: 'chat-input' }, input, send)));
     drawer.style.display = 'flex';
     const close = () => { backdrop.remove(); drawer.remove(); document.removeEventListener('keydown', onKey); coachOpen = null; };
@@ -786,9 +796,9 @@
   async function openVersions() {
     const backdrop = h('div', { class: 'drawer-backdrop', onclick: () => close() });
     const body = h('div', { class: 'drawer-body' }, h('p', { class: 'muted' }, h('span', { class: 'spinner' }), ' Loading…'));
-    const labelInput = h('input', { type: 'text', placeholder: 'e.g. Before tailoring · Google SWE', maxlength: 200 });
+    const labelInput = h('input', { type: 'text', placeholder: 'For example: Before tailoring for Google', maxlength: 200 });
     const drawer = h('aside', { class: 'drawer', role: 'dialog', 'aria-label': 'Versions' },
-      h('div', { class: 'drawer-head' }, h('h3', { text: 'Versions' }), h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, '✕')),
+      h('div', { class: 'drawer-head' }, h('h3', { text: 'Versions' }), h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, icon('x'))),
       h('div', { style: 'padding: 16px 18px; border-bottom: 1px solid var(--border)' },
         h('label', { text: 'Save a snapshot of the current resume' }),
         h('div', { class: 'row', style: 'flex-wrap:nowrap' }, labelInput,
@@ -809,7 +819,7 @@
         const { versions } = await api('GET', `/api/resumes/${RID}/versions`);
         if (!versions.length) { body.replaceChildren(h('p', { class: 'muted', text: 'No versions yet. Save one before big edits or tailoring, so you can always go back.' })); return; }
         body.replaceChildren(...versions.map(v => h('div', { class: 'version' },
-          h('div', { class: 'info' }, h('b', { text: v.label }), h('span', { class: 'tiny muted', text: `${new Date(v.created_at).toLocaleString()} · ${v.template}` })),
+          h('div', { class: 'info' }, h('b', { text: v.label }), h('span', { class: 'tiny muted', text: `${new Date(v.created_at).toLocaleString()}, ${v.template} template` })),
           h('a', { class: 'btn btn-ghost btn-sm', href: `/app/resumes/${RID}/versions/${v.id}/pdf`, title: 'Download PDF' }, 'PDF'),
           h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async () => {
             if (!confirm(`Restore “${v.label}”? Your current content will be replaced. Save a version first if you want to keep it.`)) return;
@@ -821,7 +831,7 @@
           h('button', { class: 'icon-btn', type: 'button', title: 'Delete version', 'aria-label': 'Delete version', onclick: async () => {
             if (!confirm('Delete this version?')) return;
             await api('DELETE', `/api/resumes/${RID}/versions/${v.id}`); load();
-          } }, '🗑'))));
+          } }, icon('trash')))));
       } catch (e) { body.replaceChildren(h('div', { class: 'alert alert-error', text: e.message })); }
     }
     load();
@@ -851,7 +861,7 @@
   });
   $('#mobile-switch').addEventListener('click', () => {
     const on = document.body.classList.toggle('show-preview');
-    $('#mobile-switch').textContent = on ? '✎ Edit' : '👁 Preview';
+    $('#mobile-switch').replaceChildren(icon(on ? 'pen' : 'eye'), on ? ' Edit' : ' Preview');
     if (on) refreshPreview();
   });
 

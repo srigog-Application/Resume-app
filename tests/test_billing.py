@@ -75,7 +75,7 @@ def test_webhook_exempt_from_origin_check(client):
 def test_checkout_unavailable_without_stripe_keys(user_client):
     r = user_client.post("/billing/checkout")
     assert r.status_code == 503
-    assert "configured on this server" in user_client.get("/app/account").text
+    assert "set up on this server" in user_client.get("/app/account").text
 
 
 def _stripe_obj(data):

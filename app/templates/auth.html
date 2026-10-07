@@ -5,11 +5,11 @@
 <div class="auth-wrap">
   <div class="card auth-card">
     {% if mode == 'signup' %}
-      <h1>Create your free account</h1>
-      <p class="muted">Build your first resume in minutes. No credit card required.</p>
+      <h1>Create your account</h1>
+      <p class="muted">The free plan includes 3 resumes and an ATS check. No card needed.</p>
     {% else %}
       <h1>Welcome back</h1>
-      <p class="muted">Log in to keep working on your resumes.</p>
+      <p class="muted">Log in to pick up where you left off.</p>
     {% endif %}
     {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="/{{ mode }}">

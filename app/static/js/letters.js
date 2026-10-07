@@ -1,7 +1,7 @@
 /* Cover letters: generator form (list page) and autosaving editor (detail page). */
 (() => {
   'use strict';
-  const { h, api, toast, field, busy } = window.UI;
+  const { h, icon, api, toast, field, busy } = window.UI;
   const boot = JSON.parse(document.getElementById('boot').textContent);
 
   // ------------------------------------------------------------ generator
@@ -11,7 +11,7 @@
     document.getElementById('gen-left').textContent =
       left === null ? 'Unlimited letters on your plan.' : `${left} cover letter${left === 1 ? '' : 's'} left this month.`;
     if (!boot.resumes.length) {
-      formHost.append(h('p', { class: 'muted' }, 'Create a resume first. ', h('a', { href: '/app', text: 'Go to resumes →' })));
+      formHost.append(h('p', { class: 'muted' }, 'You need a resume first. ', h('a', { href: '/app', text: 'Create or upload one' })));
       return;
     }
     const st = { resume_id: boot.resumes[0].id, job_id: null, company: '', title: '', job_description: '', tone: 'professional', notes: '' };
@@ -25,7 +25,7 @@
     const jd = h('textarea', { rows: 6, placeholder: 'Paste the job description (recommended)', oninput: (e) => { st.job_description = e.target.value; } });
     const jobSel = h('select', { onchange: (e) => pickJob(Number(e.target.value) || null) },
       h('option', { value: '', text: 'Not linked to a tracked job' }),
-      boot.jobs.map(j => h('option', { value: String(j.id), text: [j.title, j.company].filter(Boolean).join(' · ') || 'Untitled job' })));
+      boot.jobs.map(j => h('option', { value: String(j.id), text: [j.title, j.company].filter(Boolean).join(' at ') || 'Untitled job' })));
     const tone = h('select', { onchange: (e) => { st.tone = e.target.value; } },
       h('option', { value: 'professional', text: 'Professional' }), h('option', { value: 'enthusiastic', text: 'Enthusiastic' }), h('option', { value: 'concise', text: 'Short & direct' }));
     const notes = h('textarea', { rows: 2, placeholder: 'Anything to emphasise? e.g. relocating to Austin, referral from Sam', oninput: (e) => { st.notes = e.target.value; } });
@@ -40,7 +40,7 @@
       if (j.resume_id) { resumeSel.value = String(j.resume_id); st.resume_id = j.resume_id; }
     }
 
-    const btn = h('button', { class: 'btn btn-ai btn-block', type: 'button' }, '✨ Generate cover letter');
+    const btn = h('button', { class: 'btn btn-ai btn-block', type: 'button' }, icon('spark'), ' Write cover letter');
     btn.addEventListener('click', () => busy(btn, 'Writing…', async () => {
       try {
         const out = await api('POST', '/api/letters/generate', st);
@@ -63,7 +63,7 @@
     let timer = null, dirty = false, saving = null;
     const warn = () => {
       const n = (bodyEl.value.match(/\[[^\]]{1,40}\]/g) || []).length;
-      document.getElementById('placeholder-warn').textContent = n ? `⚠ ${n} placeholder${n > 1 ? 's' : ''} still to fill in.` : '';
+      document.getElementById('placeholder-warn').textContent = n ? `${n} placeholder${n > 1 ? 's' : ''} still to fill in.` : '';
     };
     async function save() {
       if (!dirty) return;

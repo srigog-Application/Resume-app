@@ -5,7 +5,7 @@
   <div class="page-head">
     <div>
       <h1>Cover letters</h1>
-      <div class="muted small">Generated from your resume and the job post. Edit freely, then download a PDF.</div>
+      <div class="muted small">Drafted from your resume and the job post. Edit the draft, then download it as a PDF.</div>
     </div>
   </div>
   <div class="two-col">
@@ -16,26 +16,25 @@
         <div class="card letter-row">
           <div class="info">
             <a href="/app/letters/{{ l.id }}" style="color:inherit"><b>{{ l.title }}</b></a>
-            <div class="tiny muted">Edited <time data-ts="{{ l.updated_at.isoformat() }}Z">{{ l.updated_at.strftime('%b %d, %Y') }}</time>{% if l.job_id and jobs.get(l.job_id) %} · for a tracked job{% endif %}</div>
+            <div class="tiny muted">Edited <time data-ts="{{ l.updated_at.isoformat() }}Z">{{ l.updated_at.strftime('%b %d, %Y') }}</time>{% if l.job_id and jobs.get(l.job_id) %}, for a job in your tracker{% endif %}</div>
           </div>
           <a class="btn btn-secondary btn-sm" href="/app/letters/{{ l.id }}">Edit</a>
-          <a class="btn btn-ghost btn-sm" href="/app/letters/{{ l.id }}/pdf">PDF</a>
+          <a class="btn btn-ghost btn-sm" href="/app/letters/{{ l.id }}/pdf" title="Download PDF">{{ icon('download') }} PDF</a>
           <form method="post" action="/app/letters/{{ l.id }}/delete" onsubmit="return confirm('Delete this cover letter?')">
-            <button class="icon-btn" aria-label="Delete cover letter" title="Delete">🗑</button>
+            <button class="icon-btn" aria-label="Delete cover letter" title="Delete">{{ icon('trash') }}</button>
           </form>
         </div>
         {% endfor %}
       </div>
       {% else %}
-      <div class="card card-pad center">
-        <div style="font-size:2rem">✉️</div>
+      <div class="card card-pad">
         <h3>No cover letters yet</h3>
-        <p class="muted small">Use the generator to write your first one in under a minute.</p>
+        <p class="muted small" style="margin:0">Pick a resume and a job on the right, and the first draft is ready in under a minute.</p>
       </div>
       {% endif %}
     </div>
     <aside class="card card-pad" id="generator">
-      <h3>✨ New cover letter</h3>
+      <h3>Write a cover letter</h3>
       <p class="small muted" id="gen-left"></p>
       <div id="gen-form"></div>
     </aside>

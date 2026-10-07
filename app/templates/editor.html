@@ -5,15 +5,14 @@
 {% block footer %}{% endblock %}
 {% block content %}
 <header class="editor-bar">
-  <a class="logo" href="/app" title="Back to my resumes"><span class="logo-mark">{{ settings.app_name[:1] }}</span></a>
-  <a class="btn btn-ghost btn-sm hide-sm" href="/app">← Resumes</a>
+  <a class="btn btn-ghost btn-sm" href="/app" title="Back to your resumes">{{ icon('arrow-left') }}<span class="hide-sm">Resumes</span></a>
   <input class="input title-input" id="title" value="{{ resume.title }}" maxlength="200" aria-label="Resume title">
   <span class="save-state" id="save-state">Saved</span>
   <div class="spacer"></div>
   <span class="small muted hide-sm" id="credits" title="AI coach & rewrite credits left this month"></span>
-  <button class="btn btn-ai btn-sm" id="btn-coach">💬 <span class="hide-sm">AI coach</span></button>
-  <button class="btn btn-secondary btn-sm" id="btn-versions">🕘 <span class="hide-sm">Versions</span></button>
-  <a class="btn btn-primary btn-sm" id="btn-download" href="/app/resumes/{{ resume.id }}/pdf">⬇ <span class="hide-sm">Download PDF</span></a>
+  <button class="btn btn-ai btn-sm" id="btn-coach">{{ icon('chat') }}<span class="hide-sm">Coach</span></button>
+  <button class="btn btn-secondary btn-sm" id="btn-versions">{{ icon('history') }}<span class="hide-sm">Versions</span></button>
+  <a class="btn btn-primary btn-sm" id="btn-download" href="/app/resumes/{{ resume.id }}/pdf">{{ icon('download') }}<span class="hide-sm">Download PDF</span></a>
 </header>
 
 <div class="editor">
@@ -21,7 +20,7 @@
   <main class="editor-form" id="form" aria-live="polite"></main>
   <section class="preview-pane" aria-label="Live preview">
     <div class="preview-toolbar">
-      <b class="small">Live preview</b>
+      <b class="small">Preview</b>
       <span class="tiny muted" id="page-count"></span>
       <div class="spacer"></div>
       <select id="quick-template" class="btn-sm" style="width:auto;padding:6px 10px" aria-label="Template">
@@ -32,7 +31,7 @@
   </section>
 </div>
 
-<button class="btn btn-primary mobile-switch" id="mobile-switch">👁 Preview</button>
+<button class="btn btn-primary mobile-switch" id="mobile-switch">{{ icon('eye') }} Preview</button>
 
 <script type="application/json" id="boot">{{ {
   "resumeId": resume.id,
